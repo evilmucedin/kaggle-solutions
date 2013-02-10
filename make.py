@@ -9,6 +9,7 @@ def mkdir(dir):
 
 def run(cmd):
     import subprocess
+    print cmd
     proc = subprocess.Popen(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
     proc.wait()
 
@@ -22,15 +23,11 @@ def getCPUCount():
     return 8
 
 APP_NAME = "kaggle-solutions"
-ROOT_FOLDER = "/%s/" % APP_NAME
+ROOT_FOLDER = "/%s" % APP_NAME
 
 def splitCwd(cwd, buildDir):
     i = cwd.find(ROOT_FOLDER)
-    if i < 0:
-        if cwd.endswith(ROOT_FOLDER[:len(ROOT_FOLDER) - 1]):
-            return cwd, ""
-        raise Exception("No %s in path '%s'" % (arcadia, cwd))
-    return cwd[:i + 1] + buildDir, cwd[i + len(ROOT_FOLDER):]
+    return cwd[:i + 1] + buildDir, cwd[i + len(ROOT_FOLDER) + 1:]
 
 def handleOptions():
     from optparse import OptionParser
@@ -56,21 +53,19 @@ def mainCMake():
         mode = "Release"
     
     buildHome, projectParts = splitCwd(os.getcwd(), "%s-%s" % (APP_NAME, mode.lower()))
-    newCwd = buildHome + "/" + projectParts
     mkdir(buildHome)
     print >> sys.stderr, "buildHome=%s\nprojectParts=%s\n" % (buildHome, projectParts)
     
     makeOnly = ""
-    sMode = mode
     gen = ""
     if options.eclipse:
         sMode = "Debug"
         gen = "-G \"Eclipse CDT4 - Unix Makefiles\""
-    run("cd %s; cmake -DCMAKE_BUILD_TYPE=%s %s ../%s" % (buildHome, sMode, gen, APP_NAME))
+    run("cd %s; cmake -DCMAKE_BUILD_TYPE=%s %s ../%s" % (buildHome, mode, gen, APP_NAME))
 
     threadCount = getCPUCount()
     if not options.eclipse:
-        make(newCwd, threadCount)
+        make(buildHome, threadCount)
     else:
         run("~/eclipse/eclipse %s" % buildHome)
     
