@@ -11,7 +11,9 @@ def run(cmd):
     import subprocess
     print cmd
     proc = subprocess.Popen(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
-    proc.wait()
+    returncode = proc.wait()
+    if 0 != returncode:
+        raise Exception("'%s' failed %d" % (cmd, returncode))
 
 def getCPUCount():
     try:

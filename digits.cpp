@@ -3,7 +3,10 @@
 #include <string>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 using namespace std;
+using namespace testing;
 
 typedef unsigned char ui8;
 
@@ -84,7 +87,8 @@ struct TTimer
     ~TTimer()
     {
         clock_t end = clock();
-        fprintf(stderr, "============================== %s end - %d ==============================\n", m_message.c_str(), (int)(end - m_begin));
+        clock_t diff = end - m_begin;
+        fprintf(stderr, "============================== %s end - %d %d ==============================\n", m_message.c_str(), (int)(diff / CLOCKS_PER_SEC), (int)(diff % CLOCKS_PER_SEC));
     }
 };
 
@@ -94,7 +98,7 @@ void Split(const std::string& line, char sep, TStringVector* result)
 {
     result->clear();
     size_t begin = 0;
-    for (size_t i = 0; i < line.length(); ++i)
+    for (size_t i = 0; i <= line.length(); ++i)
     {
         if (line[i] == sep || line[i] == 0)
         {
@@ -105,6 +109,16 @@ void Split(const std::string& line, char sep, TStringVector* result)
             begin = i + 1;
         }
     }
+}
+
+TEST(Split, Basics)
+{
+    TStringVector sv;
+    Split("a,b,c", ',', &sv);
+    EXPECT_EQ(sv.size(), 3);
+    EXPECT_EQ(sv[0], "a");
+    EXPECT_EQ(sv[1], "b");
+    EXPECT_EQ(sv[2], "c");
 }
 
 struct TCSVReader
@@ -210,6 +224,14 @@ int main(int argc, char* argv[])
     bool unittests = parser.Has('u', "unittests", "run unittests");
     parser.AutoUsage();
 
-    TCSVReader trainData("train.csv", true);
+    if (!unittests)
+    {
+        TCSVReader trainData("train.csv", true);
+    }
+    else
+    {
+        InitGoogleTest(&argc, argv);
+        return RUN_ALL_TESTS();
+    }
     return 0;
 }
