@@ -97,16 +97,22 @@ typedef vector<string> TStringVector;
 void Split(const std::string& line, char sep, TStringVector* result)
 {
     result->clear();
-    size_t begin = 0;
-    for (size_t i = 0; i <= line.length(); ++i)
+    if (!line.empty())
     {
-        if (line[i] == sep || line[i] == 0)
+        std::string::const_iterator begin = line.begin();
+        std::string::const_iterator now = line.begin();
+
+        while (now <= line.end())
         {
-            if (begin != i)
+            if (*now == sep || *now == 0)
             {
-                result->push_back(string(line.c_str() + begin, i - begin));
+                if (begin != now)
+                {
+                    result->push_back(string(begin, now));
+                }
+                begin = now + 1;
             }
-            begin = i + 1;
+            ++now;
         }
     }
 }
@@ -121,16 +127,33 @@ TEST(Split, Basics)
     EXPECT_EQ(sv[2], "c");
 }
 
+template<typename T>
+T FromString(const std::string& s)
+{
+    throw TException("not implemented");
+}
+
+template<>
+ui8 FromString<ui8>(const std::string& s)
+{
+    ui8 result = 0;
+    if (!s.empty())
+    {
+        for (size_t i = 0; i < s.length(); ++i)
+            result = 10*result + s[i] - '0';
+        return result;
+    }
+    else
+    {
+        throw TException("empty string");
+    }
+}
+
 struct TCSVReader
 {
     typedef vector<ui8> TData;
 
-    struct TRow
-    {
-        ui8 m_label;
-        TData m_data;
-    };
-    typedef vector<TRow> TRows;
+    typedef vector<TData> TRows;
 
     TRows m_rows;
     TFileReader m_fileReader;
@@ -146,8 +169,54 @@ struct TCSVReader
             {
                 vector<string> tokens;
                 Split(line, ',', &tokens);
+                m_rows.push_back( TData() );
+                m_rows.back().resize(tokens.size());
+                for (size_t i = 0; i < tokens.size(); ++i)
+                {
+                    m_rows.back()[i] = FromString<ui8>(tokens[i]);
+                }
             }
         }
+    }
+};
+
+struct TPicture
+{
+    const TCSVReader::TData& m_data;
+    static const size_t SIZE = 28;
+
+    TPicture(const TCSVReader::TData& data)
+        : m_data(data)
+    {
+    }
+
+    ui8 Get(size_t i, size_t j) const
+    {
+        return m_data[i*SIZE + j];
+    }
+
+    ui8 GetDigit(size_t i, size_t j) const
+    {
+        ui8 value = Get(i, j);
+        if (value)
+        {
+            return 1 + ((int)value*9)/256;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    void Draw()
+    {
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+                printf("%d", GetDigit(i, j));
+            printf("\n");
+        }
+        printf("\n");
     }
 };
 
@@ -227,6 +296,11 @@ int main(int argc, char* argv[])
     if (!unittests)
     {
         TCSVReader trainData("train.csv", true);
+        for (size_t i = 0; i < trainData.m_rows.size(); ++i)
+        {
+            TPicture(trainData.m_rows[i]).Draw();
+            printf("\n");
+        }
     }
     else
     {
