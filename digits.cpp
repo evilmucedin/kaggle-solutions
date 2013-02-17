@@ -1,4 +1,6 @@
 #include <cstdio>
+#include <cstdlib>
+#include <cmath>
 
 #include <string>
 #include <vector>
@@ -149,11 +151,11 @@ ui8 FromString<ui8>(const std::string& s)
     }
 }
 
+typedef vector<ui8> TUi8Data;
+typedef vector<TUi8Data> TRows;
+
 struct TCSVReader
 {
-    typedef vector<ui8> TData;
-
-    typedef vector<TData> TRows;
 
     TRows m_rows;
     TFileReader m_fileReader;
@@ -169,7 +171,7 @@ struct TCSVReader
             {
                 vector<string> tokens;
                 Split(line, ',', &tokens);
-                m_rows.push_back( TData() );
+                m_rows.push_back( TUi8Data() );
                 m_rows.back().resize(tokens.size());
                 for (size_t i = 0; i < tokens.size(); ++i)
                 {
@@ -182,17 +184,17 @@ struct TCSVReader
 
 struct TPicture
 {
-    const TCSVReader::TData& m_data;
+    const TUi8Data& m_data;
     static const size_t SIZE = 28;
 
-    TPicture(const TCSVReader::TData& data)
+    TPicture(const TUi8Data& data)
         : m_data(data)
     {
     }
 
     ui8 Get(size_t i, size_t j) const
     {
-        return m_data[i*SIZE + j];
+        return m_data[i*SIZE + j + 1];
     }
 
     ui8 GetDigit(size_t i, size_t j) const
@@ -287,13 +289,168 @@ struct TCommandLineParser
     }
 };
 
+float Rand01()
+{
+    return ((float)rand())/RAND_MAX;
+}
+
+void SplitLearnTest(const TRows& input, float ratio, TRows* learn, TRows* test)
+{
+    TTimer timer("SplitTestLearn");
+    learn->clear();
+    test->clear();
+    for (TRows::const_iterator toRow = input.begin(); toRow != input.end(); ++toRow)
+    {
+        if (Rand01() < ratio)
+            learn->push_back(*toRow);
+        else
+            test->push_back(*toRow);
+    }
+}
+
+struct IProbEstimator
+{
+    virtual float Estimate(const TPicture& picture) const = 0;
+
+    virtual ~IProbEstimator()
+    {
+    }
+};
+
+typedef vector<float> TFloatVector;
+typedef vector<TFloatVector> TFloatMatrix;
+
+template<typename T>
+T Sqr(T x)
+{
+    return x*x;
+}
+
+struct TCosineEstimator : public IProbEstimator
+{
+    struct TWeights : public TFloatMatrix
+    {
+        TWeights()
+        {
+            Init();
+        }
+
+        TWeights(const TPicture& picture)
+        {
+            Init();
+            for (size_t i = 0; i < TPicture::SIZE; ++i)
+            {
+                for (size_t j = 0; j < TPicture::SIZE; ++j)
+                {
+                    (*this)[i][j] = picture.Get(i, j);
+                }
+            }
+        }
+
+        void Init()
+        {
+            TFloatVector dummy(TPicture::SIZE);
+            resize(TPicture::SIZE, dummy);
+        }
+
+        void Add(const TPicture& picture)
+        {
+            for (size_t i = 0; i < TPicture::SIZE; ++i)
+            {
+                for (size_t j = 0; j < TPicture::SIZE; ++j)
+                {
+                    (*this)[i][j] += picture.Get(i, j);
+                }
+            }
+        }
+
+        void Normalize()
+        {
+            float normalizer = 0.f;
+            for (size_t i = 0; i < TPicture::SIZE; ++i)
+            {
+                for (size_t j = 0; j < TPicture::SIZE; ++j)
+                {
+                    normalizer += Sqr((*this)[i][j]);
+                }
+            }
+            normalizer = sqrtf(normalizer);
+            for (size_t i = 0; i < TPicture::SIZE; ++i)
+            {
+                for (size_t j = 0; j < TPicture::SIZE; ++j)
+                {
+                    (*this)[i][j] /= normalizer;
+                }
+            }
+        }
+
+        float Mul(const TWeights& w) const
+        {
+            float result = 0.f;
+            for (size_t i = 0; i < TPicture::SIZE; ++i)
+            {
+                for (size_t j = 0; j < TPicture::SIZE; ++j)
+                {
+                    result += (*this)[i][j]*w[i][j];
+                }
+            }
+            return result;
+        }
+    };
+
+    TWeights m_weights;
+
+    TCosineEstimator()
+    {
+    }
+
+    void Learn(const TPicture& picture)
+    {
+        m_weights.Add(picture);
+    }
+
+    void EndLearn()
+    {
+        m_weights.Normalize();
+    }
+
+    virtual float Estimate(const TPicture& picture) const
+    {
+        TWeights pictureWeights(picture);
+        pictureWeights.Normalize();
+        return m_weights.Mul(pictureWeights);
+    }
+};
+
+typedef pair<size_t, float> TBest;
+
+typedef vector<IProbEstimator*> IProbEstimators;
+
+TBest Choose(IProbEstimators estimators, const TPicture& picture)
+{
+    float best = 0.f;
+    float bestIndex = 0;
+    for (size_t i = 0; i < estimators.size(); ++i)
+    {
+        float prob = estimators[i]->Estimate(picture);
+        if (prob > best)
+        {
+            best = prob;
+            bestIndex = i;
+        }
+    }
+    return make_pair(bestIndex, best);
+}
+
 int main(int argc, char* argv[])
 {
     TCommandLineParser parser(argc, argv);
     bool unittests = parser.Has('u', "unittests", "run unittests");
+    bool draw = parser.Has('d', "draw", "draw train");
+    bool verbose = parser.Has('v', "verbose", "verbose");
     parser.AutoUsage();
 
-    if (!unittests)
+    if (draw)
     {
         TCSVReader trainData("train.csv", true);
         for (size_t i = 0; i < trainData.m_rows.size(); ++i)
@@ -302,10 +459,52 @@ int main(int argc, char* argv[])
             printf("\n");
         }
     }
-    else
+    else if (unittests)
     {
         InitGoogleTest(&argc, argv);
         return RUN_ALL_TESTS();
+    }
+    else
+    {
+        TCSVReader trainData("train.csv", true);
+        TRows learn;
+        TRows test;
+        SplitLearnTest(trainData.m_rows, 0.9, &learn, &test);
+
+        TCosineEstimator estimators[10];
+        {
+            TTimer timerLearn("Learn");
+            for (size_t i = 0; i < learn.size(); ++i)
+            {
+                estimators[learn[i][0]].Learn( TPicture(learn[i]) );
+            }
+        }
+
+        {
+            IProbEstimators pEstimators(10);
+            for (size_t i = 0; i < 10; ++i)
+            {
+                pEstimators[i] = &estimators[i];
+            }
+
+            TTimer timerLearn("Test");
+            size_t preceision = 0;
+            for (size_t i = 0; i < test.size(); ++i)
+            {
+                TPicture p(test[i]);
+                TBest best = Choose(pEstimators, p);
+                if (verbose)
+                {
+                    printf("%d %d\n", (int)test[i][0], best.first);
+                    p.Draw();
+                }
+                if (test[i][0] == best.first)
+                {
+                    ++preceision;
+                }
+            }
+            printf("Precision: %f\n", ((float)preceision)/test.size());
+        }
     }
     return 0;
 }
