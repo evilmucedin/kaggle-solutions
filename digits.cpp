@@ -246,9 +246,11 @@ struct TPicture
     typedef vector<TUi8Data> TUi8Matrix;
     TUi8Matrix m_matrix;
 
-    TPicture(const TUi8Data& data)
+    TPicture(const TUi8Data& data, bool test)
     {
-        if (data.size() != SIZE*SIZE+1)
+        const int offset = (test) ? 0 : 1;
+
+        if (data.size() != SIZE*SIZE + offset)
         {
             throw TException("bad data size '" + ToString(data.size()) + "'");
         }
@@ -261,7 +263,7 @@ struct TPicture
         {
             for (size_t j = 0; j < m_matrix[i].size(); ++j)
             {
-                m_matrix[i][j] = data[i*SIZE + j + 1];
+                m_matrix[i][j] = data[i*SIZE + j + offset];
             }
         }
     }
@@ -579,7 +581,7 @@ int main(int argc, char* argv[])
         TCSVReader trainData("train.csv", true);
         for (size_t i = 0; i < trainData.m_rows.size(); ++i)
         {
-            TPicture(trainData.m_rows[i]).Draw();
+            TPicture(trainData.m_rows[i], false).Draw();
             printf("\n");
         }
     }
@@ -591,46 +593,84 @@ int main(int argc, char* argv[])
     else if (cosine)
     {
         TCSVReader trainData("train.csv", true);
-        TRows learn;
-        TRows test;
-        SplitLearnTest(trainData.m_rows, 0.9, &learn, &test);
-
-        TCosineEstimator estimators[10];
         {
-            TTimer timerLearn("Learn");
-            for (size_t i = 0; i < learn.size(); ++i)
+            TRows learn;
+            TRows test;
+            SplitLearnTest(trainData.m_rows, 0.9, &learn, &test);
+
+            TCosineEstimator estimators[10];
             {
-                TPicture p(learn[i]);
-                // p.Crop();
-                estimators[learn[i][0]].Learn(p);
+                TTimer timerLearn("Learn");
+                for (size_t i = 0; i < learn.size(); ++i)
+                {
+                    TPicture p(learn[i], false);
+                    // p.Crop();
+                    estimators[learn[i][0]].Learn(p);
+                }
+            }
+
+            {
+                IProbEstimators pEstimators(10);
+                for (size_t i = 0; i < 10; ++i)
+                {
+                    pEstimators[i] = &estimators[i];
+                }
+
+                TTimer timerLearn("Test");
+                size_t preceision = 0;
+                for (size_t i = 0; i < test.size(); ++i)
+                {
+                    TPicture p(test[i], false);
+                    // p.Crop();
+                    TBest best = Choose(pEstimators, p);
+                    if (verbose)
+                    {
+                        printf("%d %d\n", (int)test[i][0], best.first);
+                        p.Draw();
+                    }
+                    if (test[i][0] == best.first)
+                    {
+                        ++preceision;
+                    }
+                }
+                printf("Precision: %f\n", ((float)preceision)/test.size());
             }
         }
 
         {
-            IProbEstimators pEstimators(10);
-            for (size_t i = 0; i < 10; ++i)
+            TCosineEstimator estimators[10];
             {
-                pEstimators[i] = &estimators[i];
+                TTimer timerLearn("Learn");
+                for (size_t i = 0; i < trainData.m_rows.size(); ++i)
+                {
+                    TPicture p(trainData.m_rows[i], false);
+                    estimators[trainData.m_rows[i][0]].Learn(p);
+                }
             }
 
-            TTimer timerLearn("Test");
-            size_t preceision = 0;
-            for (size_t i = 0; i < test.size(); ++i)
             {
-                TPicture p(test[i]);
-                // p.Crop();
-                TBest best = Choose(pEstimators, p);
-                if (verbose)
+                IProbEstimators pEstimators(10);
+                for (size_t i = 0; i < 10; ++i)
                 {
-                    printf("%d %d\n", (int)test[i][0], best.first);
-                    p.Draw();
+                    pEstimators[i] = &estimators[i];
                 }
-                if (test[i][0] == best.first)
+
+                TTimer timerLearn("Test");
+                TCSVReader testData("test.csv", true);
+                TCSVWriter writer("cosine.csv");
+                for (size_t i = 0; i < testData.m_rows.size(); ++i)
                 {
-                    ++preceision;
+                    TPicture p(testData.m_rows[i], true);
+                    TBest best = Choose(pEstimators, p);
+                    writer.Put( ToString(best.first) );
+                    writer.NewLine();
+                    if (verbose)
+                    {
+                        printf("%d\n", best.first);
+                        p.Draw();
+                    }
                 }
             }
-            printf("Precision: %f\n", ((float)preceision)/test.size());
         }
     }
     else
