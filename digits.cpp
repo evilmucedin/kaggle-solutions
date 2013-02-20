@@ -74,6 +74,27 @@ struct TFileReader
     }
 };
 
+struct TFileWriter
+{
+    FILE* m_file;
+
+    TFileWriter()
+    {
+        m_file = fopen(filename.c_str(), "rw");
+
+    }
+
+    void Out(const std::string& s)
+    {
+        if (fwrite(m_file, s.c_str(), s.length()))
+    }
+
+    ~TFileWriter()
+    {
+        fclose(m_file);
+    }
+};
+
 struct TTimer
 {
     string m_message;
@@ -132,7 +153,7 @@ TEST(Split, Basics)
 template<typename T>
 T FromString(const std::string& s)
 {
-    throw TException("not implemented");
+    T::Unimplemented;
 }
 
 template<>
@@ -149,6 +170,20 @@ ui8 FromString<ui8>(const std::string& s)
     {
         throw TException("empty string");
     }
+}
+
+template<typename T>
+std::string ToString(const T&)
+{
+    T::Unimplemented;
+}
+
+template<>
+std::string ToString<size_t>(const size_t& value)
+{
+    char buffer[100];
+    sprintf(buffer, "%u", (unsigned int)value);
+    return buffer;
 }
 
 typedef vector<ui8> TUi8Data;
@@ -182,19 +217,54 @@ struct TCSVReader
     }
 };
 
+struct TCSVWriter
+{
+    TFileWriter m_fileWriter;
+
+    TCVSWriter(const string& filename)
+        : m_fileWriter(filename)
+    {
+    }
+
+    void NewLine()
+    {
+    }
+
+    void Put()
+    {
+    }
+};
+
 struct TPicture
 {
-    const TUi8Data& m_data;
     static const size_t SIZE = 28;
 
+    typedef vector<TUi8Data> TUi8Matrix;
+    TUi8Matrix m_matrix;
+
     TPicture(const TUi8Data& data)
-        : m_data(data)
     {
+        if (data.size() != SIZE*SIZE+1)
+        {
+            throw TException("bad data size '" + ToString(data.size()) + "'");
+        }
+
+        {
+            TUi8Data dummy(SIZE);
+            m_matrix.resize(SIZE, dummy);
+        }
+        for (size_t i = 0; i < m_matrix.size(); ++i)
+        {
+            for (size_t j = 0; j < m_matrix[i].size(); ++j)
+            {
+                m_matrix[i][j] = data[i*SIZE + j + 1];
+            }
+        }
     }
 
     ui8 Get(size_t i, size_t j) const
     {
-        return m_data[i*SIZE + j + 1];
+        return m_matrix[i][j];
     }
 
     ui8 GetDigit(size_t i, size_t j) const
@@ -215,10 +285,59 @@ struct TPicture
         for (size_t i = 0; i < SIZE; ++i)
         {
             for (size_t j = 0; j < SIZE; ++j)
+            {
                 printf("%d", GetDigit(i, j));
+            }
             printf("\n");
         }
         printf("\n");
+    }
+
+    static bool IsZero(const TUi8Data& data)
+    {
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            if (data[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    TUi8Data Line(size_t index) const
+    {
+        return m_matrix[index];
+    }
+
+    TUi8Data Column(size_t index) const
+    {
+        TUi8Data result(SIZE);
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            result[i] = m_matrix[i][index];
+        }
+        return result;
+    }
+
+    void Crop()
+    {
+        m_matrix[SIZE - 1][SIZE - 1] = 0;
+        while (IsZero(Line(0)))
+        {
+            TUi8Data erase = *m_matrix.begin();
+            m_matrix.erase(m_matrix.begin());
+            m_matrix.push_back(erase);
+        }
+        while (IsZero(Column(0)))
+        {
+            for (size_t i = 0; i < SIZE; ++i)
+            {
+                TUi8Data& line = m_matrix[i];
+                line.erase(line.begin());
+                line.push_back(0);
+            }
+        }
     }
 };
 
@@ -445,9 +564,10 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture)
 int main(int argc, char* argv[])
 {
     TCommandLineParser parser(argc, argv);
-    bool unittests = parser.Has('u', "unittests", "run unittests");
-    bool draw = parser.Has('d', "draw", "draw train");
-    bool verbose = parser.Has('v', "verbose", "verbose");
+    const bool unittests = parser.Has('u', "unittests", "run unittests");
+    const bool draw = parser.Has('d', "draw", "draw train");
+    const bool verbose = parser.Has('v', "verbose", "verbose");
+    const bool cosine = parser.Has('c', "cosine", "cosine");
     parser.AutoUsage();
 
     if (draw)
@@ -464,7 +584,7 @@ int main(int argc, char* argv[])
         InitGoogleTest(&argc, argv);
         return RUN_ALL_TESTS();
     }
-    else
+    else if (cosine)
     {
         TCSVReader trainData("train.csv", true);
         TRows learn;
@@ -476,7 +596,9 @@ int main(int argc, char* argv[])
             TTimer timerLearn("Learn");
             for (size_t i = 0; i < learn.size(); ++i)
             {
-                estimators[learn[i][0]].Learn( TPicture(learn[i]) );
+                TPicture p(learn[i]);
+                // p.Crop();
+                estimators[learn[i][0]].Learn(p);
             }
         }
 
@@ -492,6 +614,7 @@ int main(int argc, char* argv[])
             for (size_t i = 0; i < test.size(); ++i)
             {
                 TPicture p(test[i]);
+                // p.Crop();
                 TBest best = Choose(pEstimators, p);
                 if (verbose)
                 {
@@ -505,6 +628,10 @@ int main(int argc, char* argv[])
             }
             printf("Precision: %f\n", ((float)preceision)/test.size());
         }
+    }
+    else
+    {
+
     }
     return 0;
 }
