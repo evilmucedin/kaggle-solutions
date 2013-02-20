@@ -78,15 +78,17 @@ struct TFileWriter
 {
     FILE* m_file;
 
-    TFileWriter()
+    TFileWriter(const string& filename)
     {
-        m_file = fopen(filename.c_str(), "rw");
-
+        m_file = fopen(filename.c_str(), "wb");
     }
 
-    void Out(const std::string& s)
+    void Write(const std::string& s)
     {
-        if (fwrite(m_file, s.c_str(), s.length()))
+        if (fwrite(s.c_str(), s.length(), 1, m_file) != 1)
+        {
+            throw TException("write failed");
+        }
     }
 
     ~TFileWriter()
@@ -221,17 +223,19 @@ struct TCSVWriter
 {
     TFileWriter m_fileWriter;
 
-    TCVSWriter(const string& filename)
+    TCSVWriter(const string& filename)
         : m_fileWriter(filename)
     {
     }
 
     void NewLine()
     {
+        m_fileWriter.Write("\n");
     }
 
-    void Put()
+    void Put(const string& s)
     {
+        m_fileWriter.Write(s);
     }
 };
 
