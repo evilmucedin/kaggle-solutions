@@ -503,7 +503,7 @@ struct TCommandLineParser
 
     bool AutoUsage()
     {
-        if (Has('?', "--help", "print usage help"))
+        if (m_error || Has('?', "--help", "print usage help"))
         {
             for (size_t i = 0; i < m_options.size(); ++i)
             {
@@ -518,6 +518,7 @@ struct TCommandLineParser
             printf("\n");
             exit(1);
         }
+
         if (m_error)
         {
             fprintf(stderr, "argument parsing problem: %s\n", m_strError.c_str());
@@ -707,6 +708,24 @@ struct TNeuralEstimator
         typedef vector<TSinapse> TSinapses;
         TSinapses m_sinapses;
 
+        struct TInvertedSinapse
+        {
+            ui16 m_neuronIndex;
+            ui16 m_sinapseIndex;
+
+            TInvertedSinapse()
+            {
+            }
+
+            TInvertedSinapse(ui16 neuronIndex, ui16 sinapseIndex)
+                : m_neuronIndex(neuronIndex)
+                , m_sinapseIndex(sinapseIndex)
+            {
+            }
+        };
+        typedef vector<TInvertedSinapse> TInvertedSinapses;
+        TInvertedSinapses m_invertedSinapses;
+
         void AddSinapse(ui16 inputIndex)
         {
             m_sinapses.push_back( TSinapse(inputIndex, Rand01()/100.f) );
@@ -725,16 +744,46 @@ struct TNeuralEstimator
         m_neurons.push_back(neuron);
     }
 
-    void BackPropagation(const TFloatVector& input, float targetOutput)
+    static float Sigmoid(float value)
     {
-        assert( input.size() == m_inputSize );
+        return 1.f / (1.f + expf(-value));
+    }
+
+    void Prepare()
+    {
+        for (size_t i = 0; i < m_neurons.size(); ++i)
+        {
+            const TNeuron& neuron = m_neurons[i];
+            for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
+            {
+                const TNeuron::TSinapse& sinapse = neuron.m_sinapses[j];
+                m_neurons[sinapse.m_index].m_invertedSinapses.push_back( TNeuron::TInvertedSinapse(i, j) );
+            }
+        }
     }
 
     float GetOutput(const TFloatVector& input) const
     {
         assert( input.size() == m_inputSize );
         TFloatVector data(input);
+        data.resize(Size());
+        for (size_t i = 0; i < m_neurons.size(); ++i)
+        {
+            float value = 0.f;
+            const TNeuron& neuron = m_neurons[i];
+            for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
+            {
+                const TNeuron::TSinapse& sin = neuron.m_sinapses[j];
+                value += sin.m_weight*data[sin.m_index];
+            }
+            data[i + m_inputSize] = Sigmoid(value);
+        }
         return 0.f;
+    }
+
+    void BackPropagation(const TFloatVector& input, float targetOutput)
+    {
+        assert( input.size() == m_inputSize );
     }
 
     size_t Size() const
@@ -877,6 +926,7 @@ int main(int argc, char* argv[])
                     neuronOutput.AddSinapse( estimator.Size() - Sqr(TPicture::SIZE) );
                 }
                 estimator.Add(neuronOutput);
+                estimator.Prepare();
             }
 
             {
