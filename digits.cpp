@@ -11,6 +11,9 @@ using namespace std;
 using namespace testing;
 
 typedef unsigned char ui8;
+static_assert(1 == sizeof(ui8), "ui8 bad size");
+typedef unsigned short ui16;
+static_assert(2 == sizeof(ui16), "ui16 bad size");
 
 struct TException : public exception
 {
@@ -222,22 +225,32 @@ struct TCSVReader
 struct TCSVWriter
 {
     TFileWriter m_fileWriter;
+    bool m_first;
 
     TCSVWriter(const string& filename)
         : m_fileWriter(filename)
+        , m_first(true)
     {
     }
 
     void NewLine()
     {
         m_fileWriter.Write("\n");
+        m_first = true;
     }
 
     void Put(const string& s)
     {
+        if (!m_first)
+        {
+            m_fileWriter.Write(",");
+        }
+        m_first = false;
         m_fileWriter.Write(s);
     }
 };
+
+typedef vector<float> TFloatVector;
 
 struct TPicture
 {
@@ -259,6 +272,7 @@ struct TPicture
             TUi8Data dummy(SIZE);
             m_matrix.resize(SIZE, dummy);
         }
+
         for (size_t i = 0; i < m_matrix.size(); ++i)
         {
             for (size_t j = 0; j < m_matrix[i].size(); ++j)
@@ -345,6 +359,20 @@ struct TPicture
             }
         }
     }
+
+    TFloatVector AsVector() const
+    {
+        TFloatVector result(SIZE*SIZE);
+        size_t index = 0;
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+            {
+                result[index++] = static_cast<float>(m_matrix[i][j])/256.f;
+            }
+        }
+        return result;
+    }
 };
 
 struct TCommandLineParser
@@ -427,9 +455,13 @@ void SplitLearnTest(const TRows& input, float ratio, TRows* learn, TRows* test)
     for (TRows::const_iterator toRow = input.begin(); toRow != input.end(); ++toRow)
     {
         if (Rand01() < ratio)
+        {
             learn->push_back(*toRow);
+        }
         else
+        {
             test->push_back(*toRow);
+        }
     }
 }
 
@@ -567,6 +599,61 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture)
     return make_pair(bestIndex, best);
 }
 
+struct TNeuralEstimator
+{
+    size_t m_inputSize;
+
+    struct TNeuron
+    {
+        struct TSinapse
+        {
+            ui16 m_index;
+            float m_weight;
+
+            TSinapse()
+            {
+            }
+
+            TSinapse(ui16 index, float weight)
+                : m_index(index)
+                , m_weight(weight)
+            {
+            }
+        };
+        typedef vector<TSinapse> TSinapses;
+        TSinapses m_sinapses;
+
+        void AddSinapse(ui16 inputIndex)
+        {
+            m_sinapses.push_back( TSinapse(inputIndex, Rand01()/100.f) );
+        }
+    };
+    typedef vector<TNeuron> TNeurons;
+    TNeurons m_neurons;
+
+    void SetInputSize(size_t inputSize)
+    {
+        m_inputSize = inputSize;
+    }
+
+    void BackPropagation(const TFloatVector& input, float targetOutput)
+    {
+        assert( input.size() == m_inputSize );
+    }
+
+    float GetOutput(const TFloatVector& input) const
+    {
+        assert( input.size() == m_inputSize );
+        TFloatVector data(input);
+        return 0.f;
+    }
+
+    size_t Size() const
+    {
+        return m_inputSize + m_neurons.size();
+    }
+};
+
 int main(int argc, char* argv[])
 {
     TCommandLineParser parser(argc, argv);
@@ -675,7 +762,70 @@ int main(int argc, char* argv[])
     }
     else
     {
+        TCSVReader trainData("train.csv", true);
+        {
+            TRows learn;
+            TRows test;
+            SplitLearnTest(trainData.m_rows, 0.9, &learn, &test);
 
+            TNeuralEstimator estimator;
+            {
+                TTimer timerLearn("Configure neural net");
+                estimator.SetInputSize( Sqr(TPicture::SIZE) );
+                for (size_t i = 0; i < 3; ++i)
+                {
+                    TNeuralEstimator::TNeuron neuron;
+                    for (size_t j = 0; j < Sqr(TPicture::SIZE); ++j)
+                    {
+                        neuron.AddSinapse( estimator.Size() - Sqr(TPicture::SIZE) );
+                    }
+                    estimator.Add(neuron);
+                }
+                TNeuralEstimator::TNeuron neuronOutput;
+                for (size_t j = 0; j < Sqr(TPicture::SIZE); ++j)
+                {
+                    neuronOutput.AddSinapse( estimator.Size() - Sqr(TPicture::SIZE) );
+                }
+                estimator.Add(neuronOutput);
+            }
+
+            {
+                TTimer timerLearn("Learn");
+                for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
+                {
+                    {
+                        TTimer timerLearn("Learn Iteration " + ToString(iLearnIt));
+                        for (size_t i = 0; i < learn.size(); ++i)
+                        {
+                            TPicture p(learn.m_rows[i], false);
+                            estimator.BackPropagation(p.AsVector(), (learn.m_rows[i][0] == 0) ? 1.f : 0.f);
+                        }
+                    }
+                    {
+                        TTimer timerLearn("Test Iteration " + ToString(iLearnIt));
+                        float error = 0.f;
+                        for (size_t i = 0; i < test.size(); ++i)
+                        {
+                            TPicture p(test.m_rows[i], false);
+                            float result = (test.m_rows[i][0] == 0) ? 1.f : 0.f;
+                            float netResult = estimator.Get(p.AsVector());
+                            error += Sqr(result - netResult);
+                        }
+                        printf("Error %d: %f\n", iLearnIt, error);
+                    }
+                }
+            }
+
+            {
+                TTimer timerLearn("Learn");
+                for (size_t i = 0; i < learn.size(); ++i)
+                {
+                    TPicture p(learn[i], false);
+                    // p.Crop();
+                    estimators[learn[i][0]].Learn(p);
+                }
+            }
+        }
     }
     return 0;
 }
