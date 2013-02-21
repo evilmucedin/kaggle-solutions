@@ -177,6 +177,22 @@ ui8 FromString<ui8>(const std::string& s)
     }
 }
 
+template<>
+int FromString<int>(const std::string& s)
+{
+    ui8 result = 0;
+    if (!s.empty())
+    {
+        for (size_t i = 0; i < s.length(); ++i)
+            result = 10*result + s[i] - '0';
+        return result;
+    }
+    else
+    {
+        throw TException("empty string");
+    }
+}
+
 template<typename T>
 std::string ToString(const T&)
 {
@@ -186,8 +202,24 @@ std::string ToString(const T&)
 template<>
 std::string ToString<size_t>(const size_t& value)
 {
-    char buffer[100];
-    sprintf(buffer, "%u", (unsigned int)value);
+    static const size_t BUFFER_SIZE = 64;
+    char buffer[BUFFER_SIZE];
+    if (snprintf(buffer, BUFFER_SIZE, "%u", (unsigned int)value) < 0)
+    {
+        throw TException("ToString failed");
+    }
+    return buffer;
+}
+
+template<>
+std::string ToString<int>(const int& value)
+{
+    static const size_t BUFFER_SIZE = 64;
+    char buffer[BUFFER_SIZE];
+    if (snprintf(buffer, BUFFER_SIZE, "%d", value) < 0)
+    {
+        throw TException("ToString failed");
+    }
     return buffer;
 }
 
@@ -196,18 +228,17 @@ typedef vector<TUi8Data> TRows;
 
 struct TCSVReader
 {
-
     TRows m_rows;
     TFileReader m_fileReader;
 
-    TCSVReader(const string& filename, bool verbose)
+    TCSVReader(const string& filename, bool verbose, size_t limit = std::numeric_limits<size_t>::max())
         : m_fileReader(filename)
     {
         TTimer timer("CVSReader '" + filename + "'");
         string line;
         if (m_fileReader.ReadLine(&line))
         {
-            while (m_fileReader.ReadLine(&line))
+            while (m_fileReader.ReadLine(&line) && (m_rows.size() < limit))
             {
                 vector<string> tokens;
                 Split(line, ',', &tokens);
@@ -382,15 +413,19 @@ struct TCommandLineParser
         char m_option;
         string m_longOption;
         string m_description;
+        bool m_isInt;
+        int m_intDefault;
 
         TOption()
         {
         }
 
-        TOption(char option, const string& longOption, const string& description)
+        TOption(char option, const string& longOption, const string& description, bool isInt, int intDefault)
             : m_option(option)
             , m_longOption(longOption)
             , m_description(description)
+            , m_isInt(isInt)
+            , m_intDefault(intDefault)
         {
         }
     };
@@ -398,8 +433,11 @@ struct TCommandLineParser
 
     TOptions m_options;
     TStringVector m_args;
+    bool m_error;
+    string m_strError;
 
     TCommandLineParser(int argc, char* const argv[])
+        : m_error(false)
     {
         m_args.resize(argc);
         for (size_t i = 0; i < argc; ++i)
@@ -410,7 +448,7 @@ struct TCommandLineParser
 
     bool Has(char option, const string& longOption, const string& description)
     {
-        m_options.push_back( TOption(option, longOption, description) );
+        m_options.push_back( TOption(option, longOption, description, false, 0) );
 
         string key = "-";
         key += option;
@@ -427,6 +465,42 @@ struct TCommandLineParser
         return false;
     }
 
+    int GetInt(char option, const string& longOption, const string& description, int defaultValue)
+    {
+        m_options.push_back( TOption(option, longOption, description, true, defaultValue) );
+
+        string key = "-";
+        key += option;
+        string longKey = "--";
+        longKey += longOption;
+        for (size_t i = 0; i < m_args.size(); ++i)
+        {
+            if (m_args[i] == key || m_args[i] == longKey)
+            {
+                if (i + 1 < m_args.size())
+                {
+                    try
+                    {
+                        return FromString<int>(m_args[i + 1]);
+                    }
+                    catch (...)
+                    {
+                        m_error = true;
+                        m_strError = "cannot cast to integer '" + m_args[i + 1] + "'";
+                    }
+                }
+                else
+                {
+                    m_error = true;
+                    m_strError = "not enought arguments";
+                }
+                return true;
+            }
+        }
+
+        return defaultValue;
+    }
+
     bool AutoUsage()
     {
         if (Has('?', "--help", "print usage help"))
@@ -434,10 +508,20 @@ struct TCommandLineParser
             for (size_t i = 0; i < m_options.size(); ++i)
             {
                 const TOption& option = m_options[i];
-                printf("-%c (--%s) - %s\n", option.m_option, option.m_longOption.c_str(), option.m_description.c_str());
+                printf("-%c (--%s) - %s", option.m_option, option.m_longOption.c_str(), option.m_description.c_str());
+                if (option.m_isInt)
+                {
+                    printf(" [int, default=%d]", option.m_intDefault);
+                }
+                printf("\n");
             }
             printf("\n");
             exit(1);
+        }
+        if (m_error)
+        {
+            fprintf(stderr, "argument parsing problem: %s\n", m_strError.c_str());
+            throw TException("argument parsing problem: " + m_strError + "\n");
         }
     }
 };
@@ -636,6 +720,11 @@ struct TNeuralEstimator
         m_inputSize = inputSize;
     }
 
+    void Add(const TNeuron& neuron)
+    {
+        m_neurons.push_back(neuron);
+    }
+
     void BackPropagation(const TFloatVector& input, float targetOutput)
     {
         assert( input.size() == m_inputSize );
@@ -661,6 +750,7 @@ int main(int argc, char* argv[])
     const bool draw = parser.Has('d', "draw", "draw train");
     const bool verbose = parser.Has('v', "verbose", "verbose");
     const bool cosine = parser.Has('c', "cosine", "cosine");
+    const int limit = parser.GetInt('l', "limit", "limit input", std::numeric_limits<int>::max());
     parser.AutoUsage();
 
     if (draw)
@@ -762,7 +852,7 @@ int main(int argc, char* argv[])
     }
     else
     {
-        TCSVReader trainData("train.csv", true);
+        TCSVReader trainData("train.csv", true, limit);
         {
             TRows learn;
             TRows test;
@@ -797,8 +887,8 @@ int main(int argc, char* argv[])
                         TTimer timerLearn("Learn Iteration " + ToString(iLearnIt));
                         for (size_t i = 0; i < learn.size(); ++i)
                         {
-                            TPicture p(learn.m_rows[i], false);
-                            estimator.BackPropagation(p.AsVector(), (learn.m_rows[i][0] == 0) ? 1.f : 0.f);
+                            TPicture p(learn[i], false);
+                            estimator.BackPropagation(p.AsVector(), (learn[i][0] == 0) ? 1.f : 0.f);
                         }
                     }
                     {
@@ -806,23 +896,13 @@ int main(int argc, char* argv[])
                         float error = 0.f;
                         for (size_t i = 0; i < test.size(); ++i)
                         {
-                            TPicture p(test.m_rows[i], false);
-                            float result = (test.m_rows[i][0] == 0) ? 1.f : 0.f;
-                            float netResult = estimator.Get(p.AsVector());
+                            TPicture p(test[i], false);
+                            float result = (test[i][0] == 0) ? 1.f : 0.f;
+                            float netResult = estimator.GetOutput(p.AsVector());
                             error += Sqr(result - netResult);
                         }
                         printf("Error %d: %f\n", iLearnIt, error);
                     }
-                }
-            }
-
-            {
-                TTimer timerLearn("Learn");
-                for (size_t i = 0; i < learn.size(); ++i)
-                {
-                    TPicture p(learn[i], false);
-                    // p.Crop();
-                    estimators[learn[i][0]].Learn(p);
                 }
             }
         }
