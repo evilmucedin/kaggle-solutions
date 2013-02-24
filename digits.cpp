@@ -1096,26 +1096,26 @@ int main(int argc, char* argv[])
             TTimer timerLearn("Learn");
             for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
             {
+                float ratio;
+                switch (iLearnIt)
+                {
+                    case 0:
+                        ratio = 0.01f;
+                        break;
+                    case 1:
+                        ratio = 0.05f;
+                        break;
+                    case 2:
+                        ratio = 0.2f;
+                        break;
+                    case 3:
+                        ratio = 0.5f;
+                        break;
+                    default:
+                        ratio = 1.1f;
+                }
                 {
                     TTimer timerLearn("Learn iteration " + ToString(iLearnIt));
-                    float ratio;
-                    switch (iLearnIt)
-                    {
-                        case 0:
-                            ratio = 0.01f;
-                            break;
-                        case 1:
-                            ratio = 0.05f;
-                            break;
-                        case 2:
-                            ratio = 0.2f;
-                            break;
-                        case 3:
-                            ratio = 0.5f;
-                            break;
-                        default:
-                            ratio = 1.1f;
-                    }
                     for (size_t digit = 0; digit < 10; ++digit)
                     {
                         TNeuralEstimator& estimator = estimators[digit];
@@ -1147,6 +1147,11 @@ int main(int argc, char* argv[])
                         float error = 0.f;
                         for (size_t i = 0; i < learn.size(); ++i)
                         {
+                            if (Rand01() > 2.f*ratio)
+                            {
+                                continue;
+                            }
+
                             if (i && !(i % 4000))
                             {
                                 printf("%.2f\n", ((float)i)/learn.size());
