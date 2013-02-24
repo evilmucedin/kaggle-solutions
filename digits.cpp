@@ -1147,9 +1147,9 @@ int main(int argc, char* argv[])
                         float error = 0.f;
                         for (size_t i = 0; i < learn.size(); ++i)
                         {
-                            if (!(i % 1000))
+                            if (i && !(i % 4000))
                             {
-                                printf("%f\n", ((float)i)/learn.size());
+                                printf("%.2f\n", ((float)i)/learn.size());
                             }
 
                             TPicture p(learn[i], false);
