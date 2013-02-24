@@ -94,6 +94,11 @@ struct TFileWriter
         }
     }
 
+    FILE* GetHandle()
+    {
+        return m_file;
+    }
+
     ~TFileWriter()
     {
         fclose(m_file);
@@ -223,6 +228,18 @@ std::string ToString<int>(const int& value)
     return buffer;
 }
 
+template<>
+std::string ToString<float>(const float& value)
+{
+    static const size_t BUFFER_SIZE = 64;
+    char buffer[BUFFER_SIZE];
+    if (snprintf(buffer, BUFFER_SIZE, "%f", value) < 0)
+    {
+        throw TException("ToString failed");
+    }
+    return buffer;
+}
+
 typedef vector<ui8> TUi8Data;
 typedef vector<TUi8Data> TRows;
 
@@ -331,17 +348,17 @@ struct TPicture
         }
     }
 
-    void Draw()
+    void Draw(FILE* fOut = stdout)
     {
         for (size_t i = 0; i < SIZE; ++i)
         {
             for (size_t j = 0; j < SIZE; ++j)
             {
-                printf("%d", GetDigit(i, j));
+                fprintf(fOut, "%d", GetDigit(i, j));
             }
-            printf("\n");
+            fprintf(fOut, "\n");
         }
-        printf("\n");
+        fprintf(fOut, "\n");
     }
 
     static bool IsZero(const TUi8Data& data)
@@ -1033,7 +1050,7 @@ int main(int argc, char* argv[])
                 for (size_t i = 0; i < 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 10;
+                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 100;
                     for (size_t k = 0; k < layerSize; ++k)
                     {
                         TNeuralEstimator::TNeuron neuron;
@@ -1108,12 +1125,18 @@ int main(int argc, char* argv[])
                         pEstimators[i] = &estimators[i];
                     }
 
+                    TFileWriter fOut("dump.txt");
                     for (size_t i = 0; i < test.size(); ++i)
                     {
                         TPicture p(testData.m_rows[i], true);
                         TBest best = Choose(pEstimators, p);
                         writer.Put( ToString(best.first) );
                         writer.NewLine();
+                        for (size_t j = 0; j < 10; ++j)
+                        {
+                            fOut.Write(ToString(i) + "\t" + ToString(j) + "\t" + ToString(estimators[j].Estimate(p)) + "\n");
+                            p.Draw(fOut.GetHandle());
+                        }
                         if (verbose)
                         {
                             printf("%d\n", best.first);
@@ -1141,7 +1164,7 @@ int main(int argc, char* argv[])
                 for (size_t i = 0; i < 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 10;
+                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 100;
                     for (size_t k = 0; k < layerSize; ++k)
                     {
                         TNeuralEstimator::TNeuron neuron;
