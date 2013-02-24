@@ -1145,6 +1145,7 @@ int main(int argc, char* argv[])
                     for (size_t digit = 0; digit < 10; ++digit)
                     {
                         float error = 0.f;
+                        size_t num = 0;
                         for (size_t i = 0; i < learn.size(); ++i)
                         {
                             if (Rand01() > 2.f*ratio)
@@ -1161,8 +1162,9 @@ int main(int argc, char* argv[])
                             float result = (learn[i][0] == digit) ? 1.f : 0.f;
                             float netResult = estimators[digit].GetOutput(p.AsVector());
                             error += Sqr(result - netResult);
+                            ++num;
                         }
-                        printf("Error %d %d: %f\n", (int)iLearnIt, (int)digit, error);
+                        printf("Error %d %d: %f %f\n", (int)iLearnIt, (int)digit, error, error/num);
                     }
                 }
                 {
