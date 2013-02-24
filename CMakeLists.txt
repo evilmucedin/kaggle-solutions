@@ -12,6 +12,10 @@ INCLUDE_DIRECTORIES(
     googletest/include
 )
 
+ADD_SUBDIRECTORY(
+    easybmp
+)
+
 ADD_EXECUTABLE(
     digits
     digits.cpp
@@ -20,6 +24,7 @@ ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     digits
     gtest
+    easybmp
 )
 
 IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "Intel" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "i686")
