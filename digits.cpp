@@ -185,7 +185,7 @@ ui8 FromString<ui8>(const std::string& s)
 template<>
 int FromString<int>(const std::string& s)
 {
-    ui8 result = 0;
+    int result = 0;
     if (!s.empty())
     {
         for (size_t i = 0; i < s.length(); ++i)
@@ -251,7 +251,7 @@ struct TCSVReader
     TCSVReader(const string& filename, bool verbose, size_t limit = std::numeric_limits<size_t>::max())
         : m_fileReader(filename)
     {
-        TTimer timer("CVSReader '" + filename + "'");
+        TTimer timer("CVSReader '" + filename + "' " + ToString(limit));
         string line;
         if (m_fileReader.ReadLine(&line))
         {
@@ -303,6 +303,8 @@ typedef vector<float> TFloatVector;
 struct TPicture
 {
     static const size_t SIZE = 28;
+    static const size_t SIZE2 = 7;
+    static const size_t VECTOR_SIZE = SIZE*SIZE + SIZE2*SIZE2;
 
     typedef vector<TUi8Data> TUi8Matrix;
     TUi8Matrix m_matrix;
@@ -410,13 +412,28 @@ struct TPicture
 
     TFloatVector AsVector() const
     {
-        TFloatVector result(SIZE*SIZE);
+        TFloatVector result(VECTOR_SIZE);
         size_t index = 0;
         for (size_t i = 0; i < SIZE; ++i)
         {
             for (size_t j = 0; j < SIZE; ++j)
             {
                 result[index++] = static_cast<float>(m_matrix[i][j])/256.f;
+            }
+        }
+        for (size_t i = 0; i < SIZE2; ++i)
+        {
+            for (size_t j = 0; j < SIZE2; ++j)
+            {
+                size_t sum = 0;
+                for (size_t x = 0; x < 4; ++x)
+                {
+                    for (size_t y = 0; y < 4; ++y)
+                    {
+                        sum += m_matrix[4*i + x][4*j + y];
+                    }
+                }
+                result[index++] = logf(1.f + (float)sum)/logf(1.f + 16.f*256.f);
             }
         }
         return result;
@@ -1044,13 +1061,13 @@ int main(int argc, char* argv[])
             {
                 TNeuralEstimator& estimator = estimators[i];
 
-                estimator.SetInputSize( Sqr(TPicture::SIZE) );
+                estimator.SetInputSize(TPicture::VECTOR_SIZE);
                 size_t prevLayerBegin = 0;
-                size_t prevLayerSize = Sqr(TPicture::SIZE);
+                size_t prevLayerSize = TPicture::VECTOR_SIZE;
                 for (size_t i = 0; i < 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 100;
+                    const size_t layerSize = (i == 0) ? TPicture::VECTOR_SIZE : 100;
                     for (size_t k = 0; k < layerSize; ++k)
                     {
                         TNeuralEstimator::TNeuron neuron;
@@ -1117,7 +1134,7 @@ int main(int argc, char* argv[])
                     }
                 }
                 {
-                    TTimer timerApply("Apply");
+                    TTimer timerApply("Apply " + ToString(iLearnIt));
                     TCSVWriter writer("neural.csv");
                     IProbEstimators pEstimators(10);
                     for (size_t i = 0; i < 10; ++i)
@@ -1165,13 +1182,13 @@ int main(int argc, char* argv[])
             TNeuralEstimator estimator;
             {
                 TTimer timerLearn("Configure neural net");
-                estimator.SetInputSize( Sqr(TPicture::SIZE) );
+                estimator.SetInputSize(TPicture::VECTOR_SIZE);
                 size_t prevLayerBegin = 0;
-                size_t prevLayerSize = Sqr(TPicture::SIZE);
+                size_t prevLayerSize = TPicture::VECTOR_SIZE;
                 for (size_t i = 0; i < 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? Sqr(TPicture::SIZE) : 100;
+                    const size_t layerSize = (i == 0) ? TPicture::VECTOR_SIZE : 100;
                     for (size_t k = 0; k < layerSize; ++k)
                     {
                         TNeuralEstimator::TNeuron neuron;
@@ -1196,8 +1213,8 @@ int main(int argc, char* argv[])
             }
 
             {
-                TTimer timerLearn("Learn");
-                for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
+                TTimer timerLearn("Learn " + ToString(learn.size()));
+                for (size_t iLearnIt = 0; iLearnIt < 100; ++iLearnIt)
                 {
                     {
                         TTimer timerLearn("Learn Iteration " + ToString(iLearnIt));
