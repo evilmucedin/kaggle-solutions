@@ -1,0 +1,93 @@
+To install the Lockless MPI libraries, you must first copy them to the correct location in your file system.
+
+This location depends on which linux distribution you use.
+
+The correct location is:
+
+Debian or Ubuntu based systems:
+/usr/lib
+
+Redhat, Suse or Gentoo based systems:
+64bit: /usr/lib64
+
+Become root
+> su
+"root password"
+
+
+Copy the library to the correct location (here we assume /usr/lib).  i.e.
+> cp libllmpi.so.1.2 /usr/lib
+
+Go to that location (here we assume /usr/lib)
+> cd /usr/lib
+
+Make the two symlinks to properly install the library
+> ln -sf libllmpi.so.1.2 libllmpi.so
+> ln -sf libllmpi.so.1.2 libllmpi.so.1
+
+If you want FORTRAN support, you'll want the wrapper library installed as well:
+
+> cp <download directory>/libllmpif.so.1.2 ./
+
+Make the two symlinks to properly install it
+> ln -sf libllmpif.so.1.2 libllmpif.so
+> ln -sf libllmpif.so.1.2 libllmpif.so.1
+
+
+Once you have installed all the libraries you need, regenerate your library cache for the directory you are in (assuming /usr/lib)
+> ldconfig -n /usr/lib
+
+
+Once the libraries are installed, copy the executables into a binary directory in your PATH  /usr/local/bin or /opt/bin are good choices.
+
+> cd <download directory>
+> cp mpicc /usr/local/bin
+> cp mpicxx /usr/local/bin
+> cp mpif77 /usr/local/bin
+
+Choose if you want to install with infiniband support or not.  Infiniband support requires installation of the ibverbs library to work.
+
+> cd <infiniband or noinfiniband>
+> cp mpiexec /usr/local/bin
+
+
+Make the executables runnable:
+> chmod +x /usr/local/bin/mpiexec
+> chmod +x /usr/local/bin/mpicc
+> chmod +x /usr/local/bin/mpicxx
+> chmod +x /usr/local/bin/mpif77
+
+mpicc, mpicxx and mpif77 are shell scripts.  You may want to tweak them a bit to match your build system.  By default they use gcc, g++ and gfortran as compilers.  Change the CC, CXX or F77 shell variables to other compilers to use those instead.
+
+Copy the header files to an include directory:
+> cp mpi.h /usr/local/include
+> cp pmpi.h /usr/local/include
+> cp mpif.h /usr/local/include
+> cp mpicxx.h /usr/local/include
+
+
+Now, you may choose to install the man pages if you wish.  To keep them separate from system man pages, using /usr/local/share/man is a good choice.  (This directory should be one of the ones listed in /etc/manpath.config)
+
+> cd /usr/local/share/man
+
+Make sure man1 and man3 subdirectories exist.  If not, make them:
+> ls
+> mkdir man1
+> mkdir man3
+
+Copy man pages for MPI executables:
+> cp <download directory>/man/man1/* man1/
+
+Copy man pages for MPI library functions:
+> cp <download directory>/man/man3/* man3/
+
+Finally, update the man database:
+> mandb
+
+
+Done - all installed
+> exit
+
+
+
+To uninstall Lockless MPI, simply remove the libraries from the lib directory, executables from the bin directory, and delete the man pages.

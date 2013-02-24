@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Alter this if your compiler is installed somewhere else
+CC=gcc
+
+# Default library to use
+LIB="-lllmpi"
+
+# Compile / Link
+$CC -fpic -pie -pthread $@ $LIB -Wl,-wrap,pthread_create
+
