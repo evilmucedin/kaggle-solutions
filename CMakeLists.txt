@@ -1,13 +1,11 @@
 PROJECT(kaggle)
 
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 ADD_SUBDIRECTORY(
     googletest
-)
-
-ADD_SUBDIRECTORY(
-    lockless_allocator
 )
 
 INCLUDE_DIRECTORIES(
@@ -22,5 +20,15 @@ ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     digits
     gtest
-    llalloc
 )
+
+IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "Intel")
+    ADD_SUBDIRECTORY(
+        lockless_allocator
+    )
+
+    TARGET_LINK_LIBRARIES(
+        digits
+        llalloc
+    )
+ENDIF()
