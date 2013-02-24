@@ -1132,16 +1132,17 @@ int main(int argc, char* argv[])
                         TBest best = Choose(pEstimators, p);
                         writer.Put( ToString(best.first) );
                         writer.NewLine();
-                        for (size_t j = 0; j < 10; ++j)
-                        {
-                            fOut.Write(ToString(i) + "\t" + ToString(j) + "\t" + ToString(estimators[j].Estimate(p)) + "\n");
-                            p.Draw(fOut.GetHandle());
-                        }
                         if (verbose)
                         {
                             printf("%d\n", best.first);
                             p.Draw();
                         }
+
+                        for (size_t j = 0; j < 10; ++j)
+                        {
+                            fOut.Write(ToString(i) + "\t" + ToString(j) + "\t" + ToString(estimators[j].Estimate(p)) + "\n");
+                        }
+                        p.Draw(fOut.GetHandle());
                     }
                 }
             }
