@@ -1128,6 +1128,11 @@ int main(int argc, char* argv[])
                     TFileWriter fOut("dump.txt");
                     for (size_t i = 0; i < test.size(); ++i)
                     {
+                        if (!(i % 500))
+                        {
+                            printf("%f\n", ((float)i)/test.size());
+                        }
+
                         TPicture p(testData.m_rows[i], true);
                         TBest best = Choose(pEstimators, p);
                         writer.Put( ToString(best.first) );
@@ -1142,6 +1147,7 @@ int main(int argc, char* argv[])
                         {
                             fOut.Write(ToString(i) + "\t" + ToString(j) + "\t" + ToString(estimators[j].Estimate(p)) + "\n");
                         }
+                        fOut.Write(ToString(i) + "\t" + ToString(best.first) + "\t" + ToString(best.second) + "\n");
                         p.Draw(fOut.GetHandle());
                     }
                 }
