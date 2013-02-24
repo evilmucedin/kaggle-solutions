@@ -1036,13 +1036,13 @@ int main(int argc, char* argv[])
         const TRows& learn = trainData.m_rows;
         TCSVReader testData("test.csv", true);
         const TRows& test = testData.m_rows;
-        vector<TNeuralEstimator> estimators;
+        vector<TNeuralEstimator> estimators(10);
 
         {
             TTimer timerLearn("Configure neural net");
             for (size_t i = 0; i < 10; ++i)
             {
-                TNeuralEstimator& estimator = estimators[10];
+                TNeuralEstimator& estimator = estimators[i];
 
                 estimator.SetInputSize( Sqr(TPicture::SIZE) );
                 size_t prevLayerBegin = 0;
