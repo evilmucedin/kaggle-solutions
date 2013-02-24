@@ -304,13 +304,25 @@ struct TPicture
 {
     static const size_t SIZE = 28;
     static const size_t SIZE2 = 7;
-    static const size_t VECTOR_SIZE = SIZE*SIZE + SIZE2*SIZE2;
+    // static const size_t VECTOR_SIZE = SIZE*SIZE;
+    static const size_t VECTOR_SIZE = SIZE*SIZE + 2*SIZE2*SIZE2 + 1 + 10;
 
     typedef vector<TUi8Data> TUi8Matrix;
     TUi8Matrix m_matrix;
+    TFloatVector m_features;
+    int m_digit;
 
     TPicture(const TUi8Data& data, bool test)
     {
+        if (!test)
+        {
+            m_digit = data[0];
+        }
+        else
+        {
+            m_digit = -1;
+        }
+
         const int offset = (test) ? 0 : 1;
 
         if (data.size() != SIZE*SIZE + offset)
@@ -329,6 +341,108 @@ struct TPicture
             {
                 m_matrix[i][j] = data[i*SIZE + j + offset];
             }
+        }
+
+        CalcFeatures();
+    }
+
+    void CalcFeatures()
+    {
+        m_features.resize(VECTOR_SIZE);
+        size_t index = 0;
+        float sum = 0;
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+            {
+                sum += m_matrix[i][j];
+                m_features[index++] = static_cast<float>(m_matrix[i][j])/256.f;
+            }
+        }
+        m_features[index++] = sum/SIZE/SIZE/256.f;
+
+        for (size_t i = 0; i < SIZE2; ++i)
+        {
+            for (size_t j = 0; j < SIZE2; ++j)
+            {
+                size_t sum = 0;
+                for (size_t x = 0; x < 4; ++x)
+                {
+                    for (size_t y = 0; y < 4; ++y)
+                    {
+                        sum += m_matrix[4*i + x][4*j + y];
+                    }
+                }
+                m_features[index++] = logf(1.f + (float)sum)/logf(1.f + 16.f*256.f);
+            }
+        }
+
+        TUi8Matrix backup = m_matrix;
+        Crop();
+        for (size_t i = 0; i < SIZE2; ++i)
+        {
+            for (size_t j = 0; j < SIZE2; ++j)
+            {
+                size_t sum = 0;
+                for (size_t x = 0; x < 4; ++x)
+                {
+                    for (size_t y = 0; y < 4; ++y)
+                    {
+                        sum += m_matrix[4*i + x][4*j + y];
+                    }
+                }
+                m_features[index++] = logf(1.f + (float)sum)/logf(1.f + 16.f*256.f);
+            }
+        }
+
+        m_matrix = backup;
+
+        size_t components = 0;
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+            {
+                if (m_matrix[i][j] == 0)
+                {
+                    Fill(i, j);
+                    ++components;
+                }
+            }
+        }
+        if (components > 9)
+        {
+            components = 9;
+        }
+        m_features[index + components] = 1;
+        index += 10;
+
+        m_matrix.swap(backup);
+    }
+
+    int Digit() const
+    {
+        if (-1 != m_digit)
+        {
+            return m_digit;
+        }
+        else
+        {
+            throw TException("Digit() only for test data");
+        }
+    }
+
+    void Fill(int x, int y)
+    {
+        if (x < 0 || x >= SIZE)
+            return;
+        if (y < 0 || y >= SIZE)
+            return;
+        if (0 == m_matrix[x][y])
+        {
+            m_matrix[x][y] = -1;
+            static const int DIRS[] = {1, 0, -1, 0, 0, 1, 0, -1};
+            for (size_t i = 0; i < 4; ++i)
+                Fill(x + DIRS[2*i], y + DIRS[2*i + 1]);
         }
     }
 
@@ -350,7 +464,7 @@ struct TPicture
         }
     }
 
-    void Draw(FILE* fOut = stdout)
+    void Draw(FILE* fOut = stdout) const
     {
         for (size_t i = 0; i < SIZE; ++i)
         {
@@ -359,6 +473,19 @@ struct TPicture
                 fprintf(fOut, "%d", GetDigit(i, j));
             }
             fprintf(fOut, "\n");
+        }
+        fprintf(fOut, "\n");
+    }
+
+    void DrawLine(FILE* fOut = stdout) const
+    {
+        fprintf(fOut, "-1");
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+            {
+                fprintf(fOut, ",%d", GetDigit(i, j));
+            }
         }
         fprintf(fOut, "\n");
     }
@@ -410,35 +537,13 @@ struct TPicture
         }
     }
 
-    TFloatVector AsVector() const
+    const TFloatVector& AsVector() const
     {
-        TFloatVector result(VECTOR_SIZE);
-        size_t index = 0;
-        for (size_t i = 0; i < SIZE; ++i)
-        {
-            for (size_t j = 0; j < SIZE; ++j)
-            {
-                result[index++] = static_cast<float>(m_matrix[i][j])/256.f;
-            }
-        }
-        for (size_t i = 0; i < SIZE2; ++i)
-        {
-            for (size_t j = 0; j < SIZE2; ++j)
-            {
-                size_t sum = 0;
-                for (size_t x = 0; x < 4; ++x)
-                {
-                    for (size_t y = 0; y < 4; ++y)
-                    {
-                        sum += m_matrix[4*i + x][4*j + y];
-                    }
-                }
-                result[index++] = logf(1.f + (float)sum)/logf(1.f + 16.f*256.f);
-            }
-        }
-        return result;
+        return m_features;
     }
 };
+
+typedef vector<TPicture> TPictures;
 
 struct TCommandLineParser
 {
@@ -939,6 +1044,16 @@ TEST(NeuralNet, XOR)
     }
 }
 
+void MakePictures(const TRows& rows, TPictures* pictures, bool test)
+{
+    TTimer timerLearn("MakePictures " + ToString(rows.size()));
+    pictures->clear();
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        pictures->push_back( TPicture(rows[i], test) );
+    }
+}
+
 int main(int argc, char* argv[])
 {
     TCommandLineParser parser(argc, argv);
@@ -1049,12 +1164,18 @@ int main(int argc, char* argv[])
     }
     else if (neural)
     {
-        TCSVReader trainData("train.csv", true, limit);
-        const TRows& learn = trainData.m_rows;
-        TCSVReader testData("test.csv", true);
-        const TRows& test = testData.m_rows;
-        vector<TNeuralEstimator> estimators(10);
+        TPictures pLearn;
+        {
+            TCSVReader trainData("train.csv", true, limit);
+            MakePictures(trainData.m_rows, &pLearn, false);
+        }
+        TPictures pTest;
+        {
+            TCSVReader testData("test.csv", true);
+            MakePictures(testData.m_rows, &pTest, true);
+        }
 
+        vector<TNeuralEstimator> estimators(10);
         {
             TTimer timerLearn("Configure neural net");
             for (size_t i = 0; i < 10; ++i)
@@ -1120,22 +1241,22 @@ int main(int argc, char* argv[])
                     {
                         TNeuralEstimator& estimator = estimators[digit];
                         TTimer timerLearn2("Learn iteration " + ToString(iLearnIt) + " digit " + ToString(digit));
-                        for (size_t i = 0; i < learn.size(); ++i)
+                        for (size_t i = 0; i < pLearn.size(); ++i)
                         {
+                            const TPicture& p = pLearn[i];
                             if (Rand01() > ratio)
                             {
                                 continue;
                             }
-                            const float value = (learn[i][0] == digit) ? 1.f : 0.f;
-                            TPicture p(learn[i], false);
+                            const float value = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
                             if (!(i % 100))
                             {
-                                printf("before %f %f %f\n", (float)i/learn.size(), value, estimator.GetOutput(p.AsVector()));
+                                printf("before %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
                             }
                             estimator.BackPropagation(p.AsVector(), value, iLearnIt);
                             if (!(i % 100))
                             {
-                                printf("after %f %f %f\n", (float)i/learn.size(), value, estimator.GetOutput(p.AsVector()));
+                                printf("after %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
                             }
                         }
                     }
@@ -1146,21 +1267,22 @@ int main(int argc, char* argv[])
                     {
                         float error = 0.f;
                         size_t num = 0;
-                        for (size_t i = 0; i < learn.size(); ++i)
+                        for (size_t i = 0; i < pLearn.size(); ++i)
                         {
                             if (Rand01() > 2.f*ratio)
                             {
                                 continue;
                             }
 
+                            const TPicture& p = pLearn[i];
+
                             if (i && !(i % 4000))
                             {
-                                printf("%.2f\n", ((float)i)/learn.size());
+                                printf("%.2f\n", ((float)i)/pLearn.size());
                             }
 
-                            TPicture p(learn[i], false);
-                            float result = (learn[i][0] == digit) ? 1.f : 0.f;
-                            float netResult = estimators[digit].GetOutput(p.AsVector());
+                            const float result = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
+                            const float netResult = estimators[digit].GetOutput(p.AsVector());
                             error += Sqr(result - netResult);
                             ++num;
                         }
@@ -1177,14 +1299,14 @@ int main(int argc, char* argv[])
                     }
 
                     TFileWriter fOut("dump.txt");
-                    for (size_t i = 0; i < test.size(); ++i)
+                    for (size_t i = 0; i < pTest.size(); ++i)
                     {
                         if (!(i % 500))
                         {
-                            printf("%f\n", ((float)i)/test.size());
+                            printf("%f\n", ((float)i)/pTest.size());
                         }
 
-                        TPicture p(testData.m_rows[i], true);
+                        const TPicture& p = pTest[i];
                         TBest best = Choose(pEstimators, p);
                         writer.Put( ToString(best.first) );
                         writer.NewLine();
@@ -1200,6 +1322,7 @@ int main(int argc, char* argv[])
                         }
                         fOut.Write(ToString(i) + "\t" + ToString(best.first) + "\t" + ToString(best.second) + "\n");
                         p.Draw(fOut.GetHandle());
+                        p.DrawLine(fOut.GetHandle());
                     }
                 }
             }
@@ -1207,78 +1330,82 @@ int main(int argc, char* argv[])
     }
     else
     {
-        TCSVReader trainData("train.csv", true, limit);
+        TPictures pLearn;
+        TPictures pTest;
         {
+            TCSVReader trainData("train.csv", true, limit);
             TRows learn;
             TRows test;
             SplitLearnTest(trainData.m_rows, 0.9, &learn, &test);
+            MakePictures(learn, &pLearn, false);
+            MakePictures(test, &pTest, false);
+        }
 
-            TNeuralEstimator estimator;
+        TNeuralEstimator estimator;
+        {
+            TTimer timerLearn("Configure neural net");
+            estimator.SetInputSize(TPicture::VECTOR_SIZE);
+            size_t prevLayerBegin = 0;
+            size_t prevLayerSize = TPicture::VECTOR_SIZE;
+            for (size_t i = 0; i < 2; ++i)
             {
-                TTimer timerLearn("Configure neural net");
-                estimator.SetInputSize(TPicture::VECTOR_SIZE);
-                size_t prevLayerBegin = 0;
-                size_t prevLayerSize = TPicture::VECTOR_SIZE;
-                for (size_t i = 0; i < 2; ++i)
+                const size_t layerBegin = estimator.Size();
+                const size_t layerSize = (i == 0) ? TPicture::VECTOR_SIZE : 100;
+                for (size_t k = 0; k < layerSize; ++k)
                 {
-                    const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? TPicture::VECTOR_SIZE : 100;
-                    for (size_t k = 0; k < layerSize; ++k)
-                    {
-                        TNeuralEstimator::TNeuron neuron;
-                        for (size_t j = 0; j < prevLayerSize; ++j)
-                        {
-                            neuron.AddSinapse(prevLayerBegin + j);
-                        }
-                        estimator.Add(neuron);
-                    }
-                    prevLayerBegin = layerBegin;
-                    prevLayerSize = layerSize;
-                }
-                {
-                    TNeuralEstimator::TNeuron neuronOutput;
+                    TNeuralEstimator::TNeuron neuron;
                     for (size_t j = 0; j < prevLayerSize; ++j)
                     {
-                        neuronOutput.AddSinapse(prevLayerBegin + j);
+                        neuron.AddSinapse(prevLayerBegin + j);
                     }
-                    estimator.Add(neuronOutput);
+                    estimator.Add(neuron);
                 }
-                estimator.Prepare();
+                prevLayerBegin = layerBegin;
+                prevLayerSize = layerSize;
             }
-
             {
-                TTimer timerLearn("Learn " + ToString(learn.size()));
-                for (size_t iLearnIt = 0; iLearnIt < 100; ++iLearnIt)
+                TNeuralEstimator::TNeuron neuronOutput;
+                for (size_t j = 0; j < prevLayerSize; ++j)
                 {
+                    neuronOutput.AddSinapse(prevLayerBegin + j);
+                }
+                estimator.Add(neuronOutput);
+            }
+            estimator.Prepare();
+        }
+
+        {
+            TTimer timerLearn("Learn " + ToString(pLearn.size()));
+            for (size_t iLearnIt = 0; iLearnIt < 100; ++iLearnIt)
+            {
+                {
+                    TTimer timerLearn("Learn iteration " + ToString(iLearnIt));
+                    for (size_t i = 0; i < pLearn.size(); ++i)
                     {
-                        TTimer timerLearn("Learn Iteration " + ToString(iLearnIt));
-                        for (size_t i = 0; i < learn.size(); ++i)
+                        const TPicture& p = pLearn[i];
+                        const float value = (p.Digit() == 0) ? 1.f : 0.f;
+                        if (!(i % 100))
                         {
-                            const float value = (learn[i][0] == 0) ? 1.f : 0.f;
-                            TPicture p(learn[i], false);
-                            if (!(i % 100))
-                            {
-                                printf("before %f %f %f\n", (float)i/learn.size(), value, estimator.GetOutput(p.AsVector()));
-                            }
-                            estimator.BackPropagation(p.AsVector(), value, iLearnIt);
-                            if (!(i % 100))
-                            {
-                                printf("after %f %f %f\n", (float)i/learn.size(), value, estimator.GetOutput(p.AsVector()));
-                            }
+                            printf("before %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
+                        }
+                        estimator.BackPropagation(p.AsVector(), value, iLearnIt);
+                        if (!(i % 100))
+                        {
+                            printf("after %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
                         }
                     }
+                }
+                {
+                    TTimer timerLearn("Test iteration " + ToString(iLearnIt));
+                    float error = 0.f;
+                    for (size_t i = 0; i < pTest.size(); ++i)
                     {
-                        TTimer timerLearn("Test Iteration " + ToString(iLearnIt));
-                        float error = 0.f;
-                        for (size_t i = 0; i < test.size(); ++i)
-                        {
-                            TPicture p(test[i], false);
-                            float result = (test[i][0] == 0) ? 1.f : 0.f;
-                            float netResult = estimator.GetOutput(p.AsVector());
-                            error += Sqr(result - netResult);
-                        }
-                        printf("Error %d: %f\n", iLearnIt, error);
+                        const TPicture& p = pTest[i];
+                        const float result = (p.Digit() == 0) ? 1.f : 0.f;
+                        const float netResult = estimator.GetOutput(p.AsVector());
+                        error += Sqr(result - netResult);
                     }
+                    printf("Error %d: %f %f\n", iLearnIt, error, error/pTest.size());
                 }
             }
         }
