@@ -792,6 +792,69 @@ struct TNeuralEstimator
     }
 };
 
+TEST(NeuralNet, XOR)
+{
+    TNeuralEstimator estimator;
+    {
+        TTimer timerLearn("Configure neural net");
+        estimator.SetInputSize(2);
+        for (size_t iLayer = 0; iLayer < 2; ++iLayer)
+        {
+            for (size_t i = 0; i < 2; ++i)
+            {
+                TNeuralEstimator::TNeuron neuron;
+                for (size_t j = 0; j < 2; ++j)
+                {
+                    neuron.AddSinapse(estimator.Size() - 2);
+                }
+                estimator.Add(neuron);
+            }
+        }
+        TNeuralEstimator::TNeuron neuronOutput;
+        for (size_t j = 0; j < j; ++j)
+        {
+            neuronOutput.AddSinapse( estimator.Size() - Sqr(TPicture::SIZE) );
+        }
+        estimator.Add(neuronOutput);
+        estimator.Prepare();
+    }
+
+    {
+        for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
+        {
+            {
+                for (size_t x = 0; x < 2; ++x)
+                {
+                    for (size_t y = 0; y < 2; ++y)
+                    {
+                        TFloatVector input;
+                        input.push_back(x);
+                        input.push_back(y);
+                        const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                        estimator.BackPropagation(input, result);
+                    }
+                }
+            }
+            {
+                float error = 0.f;
+                for (size_t x = 0; x < 2; ++x)
+                {
+                    for (size_t y = 0; y < 2; ++y)
+                    {
+                        TFloatVector input;
+                        input.push_back(x);
+                        input.push_back(y);
+                        const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                        const float netResult = estimator.GetOutput(input);
+                        error += Sqr(result - netResult);
+                    }
+                }
+                printf("Error %d: %f\n", iLearnIt, error);
+            }
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     TCommandLineParser parser(argc, argv);

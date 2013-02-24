@@ -1,13 +1,17 @@
 PROJECT(kaggle)
 
-set(CMAKE_CXX_FLAGS "-std=c++0x")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 ADD_SUBDIRECTORY(
-    googletest-read-only
+    googletest
+)
+
+ADD_SUBDIRECTORY(
+    lockless_allocator
 )
 
 INCLUDE_DIRECTORIES(
-    googletest-read-only/include
+    googletest/include
 )
 
 ADD_EXECUTABLE(
@@ -18,5 +22,5 @@ ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     digits
     gtest
+    llalloc
 )
-
