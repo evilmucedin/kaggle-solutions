@@ -784,7 +784,7 @@ struct TNeuralEstimator
                 const TNeuron::TSinapse& sin = neuron.m_sinapses[j];
                 value += sin.m_weight*(*result)[sin.m_index];
             }
-            (*result)[i + m_inputSize] = Sigmoid(value);
+            (*result)[i] = Sigmoid(value);
         }
 
     }
@@ -833,7 +833,6 @@ TEST(NeuralNet, XOR)
 {
     TNeuralEstimator estimator;
     {
-        TTimer timerLearn("Configure neural net");
         estimator.SetInputSize(2);
         for (size_t iLayer = 0; iLayer < 2; ++iLayer)
         {
@@ -848,7 +847,7 @@ TEST(NeuralNet, XOR)
             }
         }
         TNeuralEstimator::TNeuron neuronOutput;
-        for (size_t j = 0; j < j; ++j)
+        for (size_t j = 0; j < 2; ++j)
         {
             neuronOutput.AddSinapse( estimator.Size() - Sqr(TPicture::SIZE) );
         }
