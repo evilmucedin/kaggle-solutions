@@ -737,6 +737,11 @@ struct TNeuralEstimator
     void SetInputSize(size_t inputSize)
     {
         m_inputSize = inputSize;
+        assert(m_neurons.empty());
+        for (size_t i = 0; i < inputSize; ++i)
+        {
+            m_neurons.push_back(TNeuron());
+        }
     }
 
     void Add(const TNeuron& neuron)
@@ -762,33 +767,65 @@ struct TNeuralEstimator
         }
     }
 
-    float GetOutput(const TFloatVector& input) const
+    void CalculateValues(const TFloatVector& input, TFloatVector* result) const
     {
-        assert( input.size() == m_inputSize );
-        TFloatVector data(input);
-        data.resize(Size());
-        for (size_t i = 0; i < m_neurons.size(); ++i)
+        assert(input.size() == m_inputSize);
+        result->resize(Size());
+        for (size_t i = 0; i < input.size(); ++i)
+        {
+            (*result)[i] = input[i];
+        }
+        for (size_t i = m_inputSize; i < m_neurons.size(); ++i)
         {
             float value = 0.f;
             const TNeuron& neuron = m_neurons[i];
             for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
             {
                 const TNeuron::TSinapse& sin = neuron.m_sinapses[j];
-                value += sin.m_weight*data[sin.m_index];
+                value += sin.m_weight*(*result)[sin.m_index];
             }
-            data[i + m_inputSize] = Sigmoid(value);
+            (*result)[i + m_inputSize] = Sigmoid(value);
         }
-        return 0.f;
+
+    }
+
+    float GetOutput(const TFloatVector& input) const
+    {
+        TFloatVector data;
+        CalculateValues(input, &data);
+        return data.back();
     }
 
     void BackPropagation(const TFloatVector& input, float targetOutput)
     {
-        assert( input.size() == m_inputSize );
+        TFloatVector data;
+        CalculateValues(input, &data);
+        TFloatVector delta(Size());
+        delta.back() = -data.back()*(1.f - data.back())*(targetOutput - data.back());
+        for (size_t i = m_neurons.size() - 2; i >= m_inputSize; --i)
+        {
+            float sum = 0.f;
+            for (size_t j = 0; j < m_neurons[i].m_invertedSinapses.size(); ++j)
+            {
+                const TNeuron::TInvertedSinapse& is = m_neurons[i].m_invertedSinapses[j];
+                sum += data[is.m_neuronIndex]*m_neurons[is.m_neuronIndex].m_sinapses[is.m_sinapseIndex].m_weight;
+            }
+            delta[i] = -data[i]*(1.f - data[i])*sum;
+        }
+        for (size_t i = m_inputSize; i < m_neurons.size(); ++i)
+        {
+            TNeuron& neuron = m_neurons[i];
+            for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
+            {
+                TNeuron::TSinapse& s = neuron.m_sinapses[j];
+                s.m_weight += 0.1*delta[s.m_index]*data[i];
+            }
+        }
     }
 
     size_t Size() const
     {
-        return m_inputSize + m_neurons.size();
+        return m_neurons.size();
     }
 };
 
