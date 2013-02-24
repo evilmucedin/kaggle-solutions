@@ -1257,6 +1257,7 @@ int main(int argc, char* argv[])
                             if (!(i % 100))
                             {
                                 printf("after %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
+                                fflush(stdout);
                             }
                         }
                     }
@@ -1279,6 +1280,7 @@ int main(int argc, char* argv[])
                             if (i && !(i % 4000))
                             {
                                 printf("%.2f\n", ((float)i)/pLearn.size());
+                                fflush(stdout);
                             }
 
                             const float result = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
@@ -1304,6 +1306,7 @@ int main(int argc, char* argv[])
                         if (!(i % 500))
                         {
                             printf("%f\n", ((float)i)/pTest.size());
+                            fflush(stdout);
                         }
 
                         const TPicture& p = pTest[i];
