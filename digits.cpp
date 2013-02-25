@@ -845,7 +845,7 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
 {
     float best = 0.f;
     float nextToBest = 0.f;
-    float bestIndex = 0;
+    size_t bestIndex = 0;
     vector<float> probes(estimators.size());
     for (size_t i = 0; i < estimators.size(); ++i)
     {
@@ -862,7 +862,8 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
     {
         MkDir(name);
         picture.SaveBMP(name + "/" + ToString(index) + ".bmp");
-        TFileWriter fOut(name + "/" + ToString(index) + ".bmp");
+        TFileWriter fOut(name + "/" + ToString(index) + ".txt");
+        fOut.Write(ToString(bestIndex) + "\t" + ToString(best) + "\t" + ToString(nextToBest));
         for (size_t i = 0; i < probes.size(); ++i)
         {
             fOut.Write( ToString(i) + "\t" + ToString(probes[i]) + "\n" );
