@@ -553,11 +553,11 @@ struct TPicture
             for (size_t j = 0; j < SIZE; ++j)
             {
                 RGBApixel pixel;
-                pixel.Blue = Get(i, j);
-                pixel.Red = Get(i, j);
-                pixel.Green = Get(i, j);
+                pixel.Blue = 255 - Get(i, j);
+                pixel.Red = 255 - Get(i, j);
+                pixel.Green = 255 - Get(i, j);
                 pixel.Alpha = 0;
-                bmp.SetPixel(i, j, pixel);
+                bmp.SetPixel(j, i, pixel);
             }
         }
         if (!bmp.WriteToFile(s.c_str()))
@@ -831,6 +831,11 @@ typedef pair<size_t, float> TBest;
 
 typedef vector<IProbEstimator*> IProbEstimators;
 
+void MkDir(const string& name)
+{
+    mkdir(name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+}
+
 TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& name, size_t index)
 {
     float best = 0.f;
@@ -850,7 +855,7 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
     }
     if ((best < 0.8f) || (nextToBest + 0.2f > best))
     {
-        mkdir(name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        MkDir(name);
         picture.SaveBMP(name + "/" + ToString(index) + ".bmp");
         TFileWriter fOut(name + "/" + ToString(index) + ".bmp");
         for (size_t i = 0; i < probes.size(); ++i)
@@ -1323,7 +1328,16 @@ int main(int argc, char* argv[])
 
                             const float result = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
                             const float netResult = estimators[digit].GetOutput(p.AsVector());
-                            error += Sqr(result - netResult);
+                            const float dError = Sqr(result - netResult);
+                            if (dError > 0.25f)
+                            {
+                                const string name = "debug/learn" + ToString(iLearnIt);
+                                MkDir(name);
+                                p.SaveBMP(name + "/" + ToString(i) + ".bmp");
+                                TFileWriter fOut(name + "/" + ToString(i) + ".txt");
+                                fOut.Write( ToString(i) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
+                            }
+                            error += dError;
                             ++num;
                         }
                         printf("Error %d %d: %f %f\n", (int)iLearnIt, (int)digit, error, error/num);
@@ -1348,7 +1362,7 @@ int main(int argc, char* argv[])
                         }
 
                         const TPicture& p = pTest[i];
-                        TBest best = Choose(pEstimators, p, "testNN", i);
+                        TBest best = Choose(pEstimators, p, "debug/testNN" + ToString(iLearnIt), i);
                         writer.Put( ToString(best.first) );
                         writer.NewLine();
                         if (verbose)
