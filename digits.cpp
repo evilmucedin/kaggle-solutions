@@ -492,6 +492,11 @@ struct TPicture
         fprintf(fOut, "\n");
     }
 
+    void Write(TFileWriter& fw) const
+    {
+        DrawLine(fw.GetHandle());
+    }
+
     static bool IsZero(const TUi8Data& data)
     {
         for (size_t i = 0; i < data.size(); ++i)
@@ -862,6 +867,7 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
         {
             fOut.Write( ToString(i) + "\t" + ToString(probes[i]) + "\n" );
         }
+        picture.Write(fOut);
     }
     return make_pair(bestIndex, best);
 }
@@ -1336,6 +1342,7 @@ int main(int argc, char* argv[])
                                 p.SaveBMP(name + "/" + ToString(i) + ".bmp");
                                 TFileWriter fOut(name + "/" + ToString(i) + ".txt");
                                 fOut.Write( ToString(i) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
+                                p.Write(fOut);
                             }
                             error += dError;
                             ++num;
