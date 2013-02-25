@@ -1094,6 +1094,16 @@ TEST(NeuralNet, XOR)
     }
 }
 
+template<typename T>
+void Shuffle(vector<T>& v)
+{
+    for (ssize_t i = (ssize_t)v.size() - 1; i >= 1; --i)
+    {
+        size_t index = rand() % i;
+        swap(v[index], v[i]);
+    }
+}
+
 void MakePictures(const TRows& rows, TPictures* pictures, bool test)
 {
     TTimer timerLearn("MakePictures " + ToString(rows.size()));
@@ -1318,6 +1328,12 @@ int main(int argc, char* argv[])
                     {
                         float error = 0.f;
                         size_t num = 0;
+                        vector<size_t> indexes(pLearn.size());
+                        for (size_t i = 0; i < indexes.size(); ++i)
+                        {
+                            indexes[i] = i;
+                        }
+                        Shuffle(indexes);
                         for (size_t i = 0; i < pLearn.size(); ++i)
                         {
                             if (Rand01() > 2.f*ratio)
@@ -1325,7 +1341,8 @@ int main(int argc, char* argv[])
                                 continue;
                             }
 
-                            const TPicture& p = pLearn[i];
+                            const size_t index = indexes[i];
+                            const TPicture& p = pLearn[indexes[i]];
 
                             if (i && !(i % 4000))
                             {
@@ -1333,16 +1350,16 @@ int main(int argc, char* argv[])
                                 fflush(stdout);
                             }
 
-                            const float result = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
+                            const float result = (p.Digit() == digit) ? 1.f : 0.f;
                             const float netResult = estimators[digit].GetOutput(p.AsVector());
                             const float dError = Sqr(result - netResult);
                             if (dError > 0.25f)
                             {
                                 const string name = "debug/learn" + ToString(iLearnIt);
                                 MkDir(name);
-                                p.SaveBMP(name + "/" + ToString(i) + ".bmp");
-                                TFileWriter fOut(name + "/" + ToString(i) + ".txt");
-                                fOut.Write( ToString(i) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
+                                p.SaveBMP(name + "/" + ToString(index) + ".bmp");
+                                TFileWriter fOut(name + "/" + ToString(index) + ".txt");
+                                fOut.Write( ToString(index) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
                                 p.Write(fOut);
                             }
                             error += dError;
