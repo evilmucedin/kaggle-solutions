@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "easybmp/EasyBMP.h"
+
 #include "gtest/gtest.h"
 
 using namespace std;
@@ -541,6 +543,28 @@ struct TPicture
     {
         return m_features;
     }
+
+    void SaveBMP(const string& s) const
+    {
+        BMP bmp;
+        bmp.SetSize(SIZE, SIZE);
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            for (size_t j = 0; j < SIZE; ++j)
+            {
+                RGBApixel pixel;
+                pixel.Blue = Get(i, j);
+                pixel.Red = Get(i, j);
+                pixel.Green = Get(i, j);
+                pixel.Alpha = 0;
+                bmp.SetPixel(i, j, pixel);
+            }
+        }
+        if (!bmp.WriteToFile(s.c_str()))
+        {
+            throw TException("Could not SaveBMP '" + s + "'");
+        }
+    }
 };
 
 typedef vector<TPicture> TPictures;
@@ -807,17 +831,31 @@ typedef pair<size_t, float> TBest;
 
 typedef vector<IProbEstimator*> IProbEstimators;
 
-TBest Choose(IProbEstimators estimators, const TPicture& picture)
+TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& name, size_t index)
 {
     float best = 0.f;
+    float nextToBest = 0.f;
     float bestIndex = 0;
+    vector<float> probes(estimators.size());
     for (size_t i = 0; i < estimators.size(); ++i)
     {
-        float prob = estimators[i]->Estimate(picture);
+        const float prob = estimators[i]->Estimate(picture);
+        probes[i] = prob;
         if (prob > best)
         {
+            nextToBest = best;
             best = prob;
             bestIndex = i;
+        }
+    }
+    if ((best < 0.8f) || (nextToBest + 0.2f > best))
+    {
+        mkdir(name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        picture.SaveBMP(name + "/" + ToString(index) + ".bmp");
+        TFileWriter fOut(name + "/" + ToString(index) + ".bmp");
+        for (size_t i = 0; i < probes.size(); ++i)
+        {
+            fOut.Write( ToString(i) + "\t" + ToString(probes[i]) + "\n" );
         }
     }
     return make_pair(bestIndex, best);
@@ -1111,7 +1149,7 @@ int main(int argc, char* argv[])
                 {
                     TPicture p(test[i], false);
                     // p.Crop();
-                    TBest best = Choose(pEstimators, p);
+                    TBest best = Choose(pEstimators, p, "test", i);
                     if (verbose)
                     {
                         printf("%d %d\n", (int)test[i][0], best.first);
@@ -1150,7 +1188,7 @@ int main(int argc, char* argv[])
                 for (size_t i = 0; i < testData.m_rows.size(); ++i)
                 {
                     TPicture p(testData.m_rows[i], true);
-                    TBest best = Choose(pEstimators, p);
+                    TBest best = Choose(pEstimators, p, "test", i);
                     writer.Put( ToString(best.first) );
                     writer.NewLine();
                     if (verbose)
@@ -1310,7 +1348,7 @@ int main(int argc, char* argv[])
                         }
 
                         const TPicture& p = pTest[i];
-                        TBest best = Choose(pEstimators, p);
+                        TBest best = Choose(pEstimators, p, "testNN", i);
                         writer.Put( ToString(best.first) );
                         writer.NewLine();
                         if (verbose)
