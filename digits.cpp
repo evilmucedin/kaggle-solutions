@@ -137,9 +137,9 @@ void Split(const std::string& line, char sep, TStringVector* result)
         std::string::const_iterator begin = line.begin();
         std::string::const_iterator now = line.begin();
 
-        while (now <= line.end())
+        while (now < line.end())
         {
-            if (*now == sep || *now == 0)
+            if (*now == sep)
             {
                 if (begin != now)
                 {
@@ -148,6 +148,11 @@ void Split(const std::string& line, char sep, TStringVector* result)
                 begin = now + 1;
             }
             ++now;
+        }
+
+        if (begin != line.end())
+        {
+            result->push_back(string(begin, line.end()));
         }
     }
 }
@@ -160,6 +165,7 @@ TEST(Split, Basics)
     EXPECT_EQ(sv[0], "a");
     EXPECT_EQ(sv[1], "b");
     EXPECT_EQ(sv[2], "c");
+    EXPECT_EQ(sv[2].length(), 1);
 }
 
 template<typename T>
@@ -863,7 +869,7 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
         MkDir(name);
         picture.SaveBMP(name + "/" + ToString(index) + ".bmp");
         TFileWriter fOut(name + "/" + ToString(index) + ".txt");
-        fOut.Write(ToString(bestIndex) + "\t" + ToString(best) + "\t" + ToString(nextToBest));
+        fOut.Write(ToString(bestIndex) + "\t" + ToString(best) + "\t" + ToString(nextToBest) + "\n");
         for (size_t i = 0; i < probes.size(); ++i)
         {
             fOut.Write( ToString(i) + "\t" + ToString(probes[i]) + "\n" );
@@ -917,7 +923,7 @@ struct TNeuralEstimator : public IProbEstimator
 
         void AddSinapse(ui16 inputIndex)
         {
-            m_sinapses.push_back( TSinapse(inputIndex, (Rand01() - 0.5f)*0.1f) );
+            m_sinapses.push_back( TSinapse(inputIndex, (Rand01() - 0.5f)*5.f) );
         }
     };
     typedef vector<TNeuron> TNeurons;
@@ -991,6 +997,19 @@ struct TNeuralEstimator : public IProbEstimator
         return GetOutput(input.AsVector());
     }
 
+    void Inflate()
+    {
+        for (size_t i = m_inputSize; i < m_neurons.size(); ++i)
+        {
+            TNeuron& neuron = m_neurons[i];
+            for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
+            {
+                neuron.m_sinapses[j].m_weight *= 1.f + (Rand01() - 0.6f)*0.00001f;
+                neuron.m_sinapses[j].m_weight += (Rand01() - 0.6f)*0.0000001f;
+            }
+        }
+    }
+
     void BackPropagation(const TFloatVector& input, float targetOutput, size_t iteration)
     {
         TFloatVector data;
@@ -1015,6 +1034,7 @@ struct TNeuralEstimator : public IProbEstimator
             for (size_t j = 0; j < neuron.m_sinapses.size(); ++j)
             {
                 TNeuron::TSinapse& s = neuron.m_sinapses[j];
+                // printf("\t%f %f %f %f %f\n", s.m_weight, learnRate*delta[i]*data[s.m_index], learnRate, delta[i], data[s.m_index]);
                 s.m_weight += learnRate*delta[i]*data[s.m_index];
             }
         }
@@ -1058,9 +1078,10 @@ TEST(NeuralNet, XOR)
     }
 
     {
-        for (size_t iLearnIt = 0; iLearnIt < 1000; ++iLearnIt)
+        for (size_t iLearnIt = 0; iLearnIt < 100000; ++iLearnIt)
         {
             {
+                estimator.Inflate();
                 for (size_t x = 0; x < 2; ++x)
                 {
                     for (size_t y = 0; y < 2; ++y)
@@ -1234,7 +1255,14 @@ int main(int argc, char* argv[])
             TCSVReader testData("test.csv", true);
             MakePictures(testData.m_rows, &pTest, true);
         }
-
+        {
+            TPictures pHand;
+            {
+                TCSVReader handData("hand.csv", true);
+                MakePictures(handData.m_rows, &pHand, false);
+            }
+            pLearn.insert(pLearn.end(), pHand.begin(), pHand.end());
+        }
         vector<TNeuralEstimator> estimators(10);
         {
             TTimer timerLearn("Configure neural net");
@@ -1275,7 +1303,7 @@ int main(int argc, char* argv[])
 
         {
             TTimer timerLearn("Learn");
-            for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
+            for (size_t iLearnIt = 0; iLearnIt < 100; ++iLearnIt)
             {
                 float ratio;
                 switch (iLearnIt)
@@ -1301,6 +1329,7 @@ int main(int argc, char* argv[])
                     {
                         TNeuralEstimator& estimator = estimators[digit];
                         TTimer timerLearn2("Learn iteration " + ToString(iLearnIt) + " digit " + ToString(digit));
+                        estimator.Inflate();
                         for (size_t i = 0; i < pLearn.size(); ++i)
                         {
                             const TPicture& p = pLearn[i];
@@ -1386,6 +1415,11 @@ int main(int argc, char* argv[])
                             fflush(stdout);
                         }
 
+                        if (Rand01() > 2.f*ratio)
+                        {
+                            continue;
+                        }
+
                         const TPicture& p = pTest[i];
                         TBest best = Choose(pEstimators, p, "debug/testNN" + ToString(iLearnIt), i);
                         writer.Put( ToString(best.first) );
@@ -1460,6 +1494,7 @@ int main(int argc, char* argv[])
             {
                 {
                     TTimer timerLearn("Learn iteration " + ToString(iLearnIt));
+                    estimator.Inflate();
                     for (size_t i = 0; i < pLearn.size(); ++i)
                     {
                         const TPicture& p = pLearn[i];
