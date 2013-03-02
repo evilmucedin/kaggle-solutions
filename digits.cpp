@@ -16,6 +16,8 @@ typedef unsigned char ui8;
 static_assert(1 == sizeof(ui8), "ui8 bad size");
 typedef unsigned short ui16;
 static_assert(2 == sizeof(ui16), "ui16 bad size");
+typedef unsigned int ui32;
+static_assert(4 == sizeof(ui32), "ui32 bad size");
 
 struct TException : public exception
 {
@@ -65,11 +67,33 @@ struct TFileReader
         if (fgets(buffer, BUFFER_LEN, m_file))
         {
             *result = buffer;
+            while (!result->empty() && (result->back() == '\n' || result->back() == '\r'))
+            {
+                result->resize(result->size() - 1);
+            }
             return true;
         }
         else
         {
             return false;
+        }
+    }
+
+    bool Eof()
+    {
+        return feof(m_file);
+    }
+
+    char ReadChar()
+    {
+        char result;
+        if (1 == fread(&result, 1, 1, m_file))
+        {
+            return result;
+        }
+        else
+        {
+            throw TException("read failed");
         }
     }
 
@@ -168,42 +192,9 @@ TEST(Split, Basics)
     EXPECT_EQ(sv[2].length(), 1);
 }
 
-template<typename T>
-T FromString(const std::string& s)
+bool IsDigit(char ch)
 {
-    T::Unimplemented;
-}
-
-template<>
-ui8 FromString<ui8>(const std::string& s)
-{
-    ui8 result = 0;
-    if (!s.empty())
-    {
-        for (size_t i = 0; i < s.length(); ++i)
-            result = 10*result + s[i] - '0';
-        return result;
-    }
-    else
-    {
-        throw TException("empty string");
-    }
-}
-
-template<>
-int FromString<int>(const std::string& s)
-{
-    int result = 0;
-    if (!s.empty())
-    {
-        for (size_t i = 0; i < s.length(); ++i)
-            result = 10*result + s[i] - '0';
-        return result;
-    }
-    else
-    {
-        throw TException("empty string");
-    }
+    return (ch >= '0') && (ch <= '9');
 }
 
 template<typename T>
@@ -246,6 +237,100 @@ std::string ToString<float>(const float& value)
         throw TException("ToString failed");
     }
     return buffer;
+}
+
+template<>
+std::string ToString<char>(const char& value)
+{
+    std::string result;
+    result += value;
+    return result;
+}
+
+template<typename T>
+T FromString(const std::string& s)
+{
+    T::Unimplemented;
+}
+
+template<>
+ui8 FromString<ui8>(const std::string& s)
+{
+    ui8 result = 0;
+    if (!s.empty())
+    {
+        for (size_t i = 0; i < s.length(); ++i)
+        {
+            if (!IsDigit(s[i]))
+            {
+                throw TException("bad char '" + ToString(s[i]) + "'");
+            }
+            result = 10*result + s[i] - '0';
+        }
+        return result;
+    }
+    else
+    {
+        throw TException("empty string");
+    }
+}
+
+template<>
+int FromString<int>(const std::string& s)
+{
+    int result = 0;
+    if (!s.empty())
+    {
+        for (size_t i = 0; i < s.length(); ++i)
+        {
+            if (!IsDigit(s[i]))
+            {
+                throw TException("bad char '" + ToString(s[i]) + "'");
+            }
+            result = 10*result + s[i] - '0';
+        }
+        return result;
+    }
+    else
+    {
+        throw TException("empty string");
+    }
+}
+
+template<>
+unsigned int FromString<unsigned int>(const std::string& s)
+{
+    unsigned int result = 0;
+    if (!s.empty())
+    {
+        for (size_t i = 0; i < s.length(); ++i)
+        {
+            if (!IsDigit(s[i]))
+            {
+                throw TException("bad char '" + ToString(s[i]) + "'");
+            }
+            result = 10*result + s[i] - '0';
+        }
+        return result;
+    }
+    else
+    {
+        throw TException("empty string");
+    }
+}
+
+template<>
+float FromString<float>(const std::string& s)
+{
+    float result = 0;
+    if (1 == sscanf(s.c_str(), "%f", &result))
+    {
+        return result;
+    }
+    else
+    {
+        throw TException("could not cast to float '" + s + "'");
+    }
 }
 
 typedef vector<ui8> TUi8Data;
@@ -303,6 +388,69 @@ struct TCSVWriter
         }
         m_first = false;
         m_fileWriter.Write(s);
+    }
+};
+
+struct TTokenReader
+{
+    TFileReader m_reader;
+
+    TTokenReader(const std::string& filename)
+        : m_reader(filename)
+    {
+    }
+
+    static bool IsDelim(char ch)
+    {
+        return ('\t' == ch) || ('\r' == ch) || ('\n' == ch);
+    }
+
+    template<typename T>
+    T NextToken()
+    {
+        T::Unimplemented();
+    }
+
+    std::string NextToken()
+    {
+        char now = m_reader.ReadChar();
+        while (!m_reader.Eof() && IsDelim(now))
+        {
+            now = m_reader.ReadChar();
+        }
+        string result;
+        if (!IsDelim(now))
+        {
+            result += now;
+            while (!m_reader.Eof())
+            {
+                now = m_reader.ReadChar();
+                if (!IsDelim(now))
+                {
+                    result += now;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    ui32 NextTokenUi32()
+    {
+        return FromString<ui32>(NextToken());
+    }
+
+    float NextTokenFloat()
+    {
+        return FromString<float>(NextToken());
+    }
+
+    bool Eof()
+    {
+        return m_reader.Eof();
     }
 };
 
@@ -492,7 +640,7 @@ struct TPicture
         {
             for (size_t j = 0; j < SIZE; ++j)
             {
-                fprintf(fOut, ",%d", GetDigit(i, j));
+                fprintf(fOut, ",%d", Get(i, j));
             }
         }
         fprintf(fOut, "\n");
@@ -589,17 +737,21 @@ struct TCommandLineParser
         string m_description;
         bool m_isInt;
         int m_intDefault;
+        bool m_isString;
+        string m_stringDefault;
 
         TOption()
         {
         }
 
-        TOption(char option, const string& longOption, const string& description, bool isInt, int intDefault)
+        TOption(char option, const string& longOption, const string& description, bool isInt, int intDefault, bool isString, const string& stringDefault)
             : m_option(option)
             , m_longOption(longOption)
             , m_description(description)
             , m_isInt(isInt)
             , m_intDefault(intDefault)
+            , m_isString(isString)
+            , m_stringDefault(stringDefault)
         {
         }
     };
@@ -622,7 +774,7 @@ struct TCommandLineParser
 
     bool Has(char option, const string& longOption, const string& description)
     {
-        m_options.push_back( TOption(option, longOption, description, false, 0) );
+        m_options.push_back( TOption(option, longOption, description, false, 0, false, "") );
 
         string key = "-";
         key += option;
@@ -641,7 +793,7 @@ struct TCommandLineParser
 
     int GetInt(char option, const string& longOption, const string& description, int defaultValue)
     {
-        m_options.push_back( TOption(option, longOption, description, true, defaultValue) );
+        m_options.push_back( TOption(option, longOption, description, true, defaultValue, false, "") );
 
         string key = "-";
         key += option;
@@ -668,7 +820,35 @@ struct TCommandLineParser
                     m_error = true;
                     m_strError = "not enought arguments";
                 }
-                return true;
+                return defaultValue;
+            }
+        }
+
+        return defaultValue;
+    }
+
+    string Get(char option, const string& longOption, const string& description, const string& defaultValue)
+    {
+        m_options.push_back( TOption(option, longOption, description, false, 0, true, defaultValue) );
+
+        string key = "-";
+        key += option;
+        string longKey = "--";
+        longKey += longOption;
+        for (size_t i = 0; i < m_args.size(); ++i)
+        {
+            if (m_args[i] == key || m_args[i] == longKey)
+            {
+                if (i + 1 < m_args.size())
+                {
+                    return m_args[i + 1];
+                }
+                else
+                {
+                    m_error = true;
+                    m_strError = "not enought arguments";
+                }
+                return defaultValue;
             }
         }
 
@@ -686,6 +866,10 @@ struct TCommandLineParser
                 if (option.m_isInt)
                 {
                     printf(" [int, default=%d]", option.m_intDefault);
+                }
+                else if (option.m_isString)
+                {
+                    printf(" [default='%s']", option.m_stringDefault.c_str());
                 }
                 printf("\n");
             }
@@ -921,9 +1105,36 @@ struct TNeuralEstimator : public IProbEstimator
         typedef vector<TInvertedSinapse> TInvertedSinapses;
         TInvertedSinapses m_invertedSinapses;
 
-        void AddSinapse(ui16 inputIndex)
+        void AddSinapse(ui16 inputIndex, float weight = 0.f)
         {
-            m_sinapses.push_back( TSinapse(inputIndex, (Rand01() - 0.5f)*5.f) );
+            weight *= 10.f;
+            if (0.f == weight)
+            {
+                weight = (Rand01() - 0.5f)*2.f;
+            }
+            m_sinapses.push_back( TSinapse(inputIndex, weight) );
+        }
+
+        void Save(TFileWriter& fOut) const
+        {
+            fOut.Write(ToString(m_sinapses.size()) + "\n");
+            for (size_t i = 0; i < m_sinapses.size(); ++i)
+            {
+                fOut.Write("\t" + ToString(m_sinapses[i].m_weight) + "\n");
+            }
+        }
+
+        void Load(TTokenReader& fIn)
+        {
+            const ui32 len = fIn.NextTokenUi32();
+            if (len > m_sinapses.size())
+            {
+                throw TException("bad number of sinapses");
+            }
+            for (ui32 i = 0; i < len; ++i)
+            {
+                m_sinapses[i].m_weight = fIn.NextTokenFloat();
+            }
         }
     };
     typedef vector<TNeuron> TNeurons;
@@ -1044,6 +1255,30 @@ struct TNeuralEstimator : public IProbEstimator
     {
         return m_neurons.size();
     }
+
+    void Save(const std::string& filename) const
+    {
+        TFileWriter fOut(filename);
+        fOut.Write( ToString(m_neurons.size()) + "\n" );
+        for (size_t i = 0; i < m_neurons.size(); ++i)
+        {
+            m_neurons[i].Save(fOut);
+        }
+    }
+
+    void Load(const std::string& filename)
+    {
+        TTokenReader fIn(filename);
+        ui32 len = fIn.NextTokenUi32();
+        if (len > m_neurons.size())
+        {
+            throw TException("bad neuro net input");
+        }
+        for (ui32 i = 0; i < len; ++i)
+        {
+            m_neurons[i].Load(fIn);
+        }
+    }
 };
 
 TEST(NeuralNet, XOR)
@@ -1105,13 +1340,111 @@ TEST(NeuralNet, XOR)
                         input.push_back(y);
                         const float result = ((x ^ y) == 0) ? 0.f : 1.f;
                         const float netResult = estimator.GetOutput(input);
-                        printf("%d %d %f %f\n", (int)x, (int)y, result, netResult);
+                        // printf("%d %d %f %f\n", (int)x, (int)y, result, netResult);
                         error += Sqr(result - netResult);
                     }
                 }
-                printf("Error %d: %f\n", iLearnIt, error);
+                // printf("Error %d: %f\n", iLearnIt, error);
             }
         }
+    }
+}
+
+TEST(NeuralNet, SaveLoad)
+{
+    TNeuralEstimator estimator;
+    {
+        estimator.SetInputSize(2);
+        size_t prevLayerBegin = 0;
+        size_t prevLayerSize = 2;
+        for (size_t iLayer = 0; iLayer < 1; ++iLayer)
+        {
+            size_t layerBegin = estimator.Size();
+            for (size_t i = 0; i < 3; ++i)
+            {
+                TNeuralEstimator::TNeuron neuron;
+                for (size_t j = 0; j < prevLayerSize; ++j)
+                {
+                    neuron.AddSinapse(prevLayerBegin + j);
+                }
+                estimator.Add(neuron);
+            }
+            prevLayerBegin = layerBegin;
+            prevLayerSize = 3;
+        }
+        TNeuralEstimator::TNeuron neuronOutput;
+        for (size_t j = 0; j < prevLayerSize; ++j)
+        {
+            neuronOutput.AddSinapse(prevLayerBegin + j);
+        }
+        estimator.Add(neuronOutput);
+        estimator.Prepare();
+    }
+
+    {
+        for (size_t iLearnIt = 0; iLearnIt < 10; ++iLearnIt)
+        {
+            {
+                estimator.Inflate();
+                for (size_t x = 0; x < 2; ++x)
+                {
+                    for (size_t y = 0; y < 2; ++y)
+                    {
+                        TFloatVector input;
+                        input.push_back(x);
+                        input.push_back(y);
+                        const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                        estimator.BackPropagation(input, result, iLearnIt);
+                    }
+                }
+            }
+            {
+                float error = 0.f;
+                for (size_t x = 0; x < 2; ++x)
+                {
+                    for (size_t y = 0; y < 2; ++y)
+                    {
+                        TFloatVector input;
+                        input.push_back(x);
+                        input.push_back(y);
+                        const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                        const float netResult = estimator.GetOutput(input);
+                        error += Sqr(result - netResult);
+                    }
+                }
+            }
+        }
+    }
+
+    {
+        float error = 0.f;
+        for (size_t x = 0; x < 2; ++x)
+        {
+            for (size_t y = 0; y < 2; ++y)
+            {
+                TFloatVector input;
+                input.push_back(x);
+                input.push_back(y);
+                const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                const float netResult = estimator.GetOutput(input);
+                error += Sqr(result - netResult);
+            }
+        }
+        estimator.Save("test.weights");
+        estimator.Load("test.weights");
+        for (size_t x = 0; x < 2; ++x)
+        {
+            for (size_t y = 0; y < 2; ++y)
+            {
+                TFloatVector input;
+                input.push_back(x);
+                input.push_back(y);
+                const float result = ((x ^ y) == 0) ? 0.f : 1.f;
+                const float netResult = estimator.GetOutput(input);
+                error -= Sqr(result - netResult);
+            }
+        }
+        EXPECT_TRUE(fabs(error) < 0.000001f);
     }
 }
 
@@ -1144,6 +1477,7 @@ int main(int argc, char* argv[])
     const bool cosine = parser.Has('c', "cosine", "cosine");
     const bool neural = parser.Has('n', "neural", "neural");
     const int limit = parser.GetInt('l', "limit", "limit input", std::numeric_limits<int>::max());
+    const string loadFrom = parser.Get('L', "load", "start from NN", "");
     parser.AutoUsage();
 
     if (draw)
@@ -1266,9 +1600,9 @@ int main(int argc, char* argv[])
         vector<TNeuralEstimator> estimators(10);
         {
             TTimer timerLearn("Configure neural net");
-            for (size_t i = 0; i < 10; ++i)
+            for (size_t digit = 0; digit < 10; ++digit)
             {
-                TNeuralEstimator& estimator = estimators[i];
+                TNeuralEstimator& estimator = estimators[digit];
 
                 estimator.SetInputSize(TPicture::VECTOR_SIZE);
                 size_t prevLayerBegin = 0;
@@ -1282,7 +1616,7 @@ int main(int argc, char* argv[])
                         TNeuralEstimator::TNeuron neuron;
                         for (size_t j = 0; j < prevLayerSize; ++j)
                         {
-                            neuron.AddSinapse(prevLayerBegin + j);
+                            neuron.AddSinapse(prevLayerBegin + j, ( (k + j + i) % TPicture::VECTOR_SIZE ) ? 0.f : 1.f);
                         }
                         estimator.Add(neuron);
                     }
@@ -1298,6 +1632,10 @@ int main(int argc, char* argv[])
                     estimator.Add(neuronOutput);
                 }
                 estimator.Prepare();
+                if (!loadFrom.empty())
+                {
+                    estimator.Load(loadFrom + ToString(digit));
+                }
             }
         }
 
@@ -1349,6 +1687,9 @@ int main(int argc, char* argv[])
                                 fflush(stdout);
                             }
                         }
+                        const string name = "debug/learn" + ToString(iLearnIt);
+                        MkDir(name);
+                        estimator.Save(name + "/NN" + ToString(digit));
                     }
                 }
                 {
@@ -1385,9 +1726,8 @@ int main(int argc, char* argv[])
                             if (dError > 0.25f)
                             {
                                 const string name = "debug/learn" + ToString(iLearnIt);
-                                MkDir(name);
                                 p.SaveBMP(name + "/" + ToString(index) + ".bmp");
-                                TFileWriter fOut(name + "/" + ToString(index) + ".txt");
+                                TFileWriter fOut(name + "/" + ToString(index) + "_" + ToString(digit) + ".txt");
                                 fOut.Write( ToString(index) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
                                 p.Write(fOut);
                             }
@@ -1525,5 +1865,6 @@ int main(int argc, char* argv[])
             }
         }
     }
+
     return 0;
 }
