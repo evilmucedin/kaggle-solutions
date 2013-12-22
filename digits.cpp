@@ -2,7 +2,9 @@
 #include <cstdlib>
 #include <cmath>
 
-#include <direct.h>
+#ifdef _MSC_VER
+#   include <direct.h>
+#endif
 
 #include <string>
 #include <vector>
@@ -23,7 +25,8 @@ typedef unsigned int ui32;
 static_assert(4 == sizeof(ui32), "ui32 bad size");
 
 #if defined(_MSC_VER)
-typedef std::make_signed<size_t>::type ssize_t;
+    typedef std::make_signed<size_t>::type ssize_t;
+#   define noexcept
 #endif
 
 struct TException : public exception
@@ -49,7 +52,7 @@ struct TException : public exception
         return m_message.c_str();
     }
 
-    ~TException()
+    ~TException() noexcept
     {
     }
 };
@@ -985,7 +988,11 @@ typedef vector<IProbEstimator*> IProbEstimators;
 
 void MkDir(const string& name)
 {
+#ifdef _MSC_VER
     _mkdir(name.c_str());
+#else
+    mkdir(name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
 }
 
 TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& name, size_t index)
