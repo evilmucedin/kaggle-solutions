@@ -19,6 +19,7 @@ ADD_SUBDIRECTORY(
 ADD_EXECUTABLE(
     digits
     digits.cpp
+    fileIO.cpp
 )
 
 TARGET_LINK_LIBRARIES(
