@@ -2,8 +2,11 @@
 #include <cstdlib>
 #include <cmath>
 
+#include <direct.h>
+
 #include <string>
 #include <vector>
+#include <type_traits>
 
 #include "easybmp/EasyBMP.h"
 
@@ -18,6 +21,10 @@ typedef unsigned short ui16;
 static_assert(2 == sizeof(ui16), "ui16 bad size");
 typedef unsigned int ui32;
 static_assert(4 == sizeof(ui32), "ui32 bad size");
+
+#if defined(_MSC_VER)
+typedef std::make_signed<size_t>::type ssize_t;
+#endif
 
 struct TException : public exception
 {
@@ -37,12 +44,12 @@ struct TException : public exception
     {
     }
 
-    virtual const char* what() const noexcept
+    virtual const char* what()
     {
         return m_message.c_str();
     }
 
-    ~TException() noexcept
+    ~TException()
     {
     }
 };
@@ -198,56 +205,6 @@ bool IsDigit(char ch)
 }
 
 template<typename T>
-std::string ToString(const T&)
-{
-    T::Unimplemented;
-}
-
-template<>
-std::string ToString<size_t>(const size_t& value)
-{
-    static const size_t BUFFER_SIZE = 64;
-    char buffer[BUFFER_SIZE];
-    if (snprintf(buffer, BUFFER_SIZE, "%u", (unsigned int)value) < 0)
-    {
-        throw TException("ToString failed");
-    }
-    return buffer;
-}
-
-template<>
-std::string ToString<int>(const int& value)
-{
-    static const size_t BUFFER_SIZE = 64;
-    char buffer[BUFFER_SIZE];
-    if (snprintf(buffer, BUFFER_SIZE, "%d", value) < 0)
-    {
-        throw TException("ToString failed");
-    }
-    return buffer;
-}
-
-template<>
-std::string ToString<float>(const float& value)
-{
-    static const size_t BUFFER_SIZE = 64;
-    char buffer[BUFFER_SIZE];
-    if (snprintf(buffer, BUFFER_SIZE, "%f", value) < 0)
-    {
-        throw TException("ToString failed");
-    }
-    return buffer;
-}
-
-template<>
-std::string ToString<char>(const char& value)
-{
-    std::string result;
-    result += value;
-    return result;
-}
-
-template<typename T>
 T FromString(const std::string& s)
 {
     T::Unimplemented;
@@ -263,7 +220,7 @@ ui8 FromString<ui8>(const std::string& s)
         {
             if (!IsDigit(s[i]))
             {
-                throw TException("bad char '" + ToString(s[i]) + "'");
+                throw TException("bad char '" + std::to_string(s[i]) + "'");
             }
             result = 10*result + s[i] - '0';
         }
@@ -285,7 +242,7 @@ int FromString<int>(const std::string& s)
         {
             if (!IsDigit(s[i]))
             {
-                throw TException("bad char '" + ToString(s[i]) + "'");
+                throw TException("bad char '" + std::to_string(s[i]) + "'");
             }
             result = 10*result + s[i] - '0';
         }
@@ -307,7 +264,7 @@ unsigned int FromString<unsigned int>(const std::string& s)
         {
             if (!IsDigit(s[i]))
             {
-                throw TException("bad char '" + ToString(s[i]) + "'");
+                throw TException("bad char '" + std::to_string(s[i]) + "'");
             }
             result = 10*result + s[i] - '0';
         }
@@ -344,7 +301,7 @@ struct TCSVReader
     TCSVReader(const string& filename, bool verbose, size_t limit = std::numeric_limits<size_t>::max())
         : m_fileReader(filename)
     {
-        TTimer timer("CVSReader '" + filename + "' " + ToString(limit));
+        TTimer timer("CVSReader '" + filename + "' " + std::to_string(limit));
         string line;
         if (m_fileReader.ReadLine(&line))
         {
@@ -483,7 +440,7 @@ struct TPicture
 
         if (data.size() != SIZE*SIZE + offset)
         {
-            throw TException("bad data size '" + ToString(data.size()) + "'");
+            throw TException("bad data size '" + std::to_string(data.size()) + "'");
         }
 
         {
@@ -1028,7 +985,7 @@ typedef vector<IProbEstimator*> IProbEstimators;
 
 void MkDir(const string& name)
 {
-    mkdir(name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    _mkdir(name.c_str());
 }
 
 TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& name, size_t index)
@@ -1051,12 +1008,12 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
     if ((best < 0.8f) || (nextToBest + 0.2f > best))
     {
         MkDir(name);
-        picture.SaveBMP(name + "/" + ToString(index) + ".bmp");
-        TFileWriter fOut(name + "/" + ToString(index) + ".txt");
-        fOut.Write(ToString(bestIndex) + "\t" + ToString(best) + "\t" + ToString(nextToBest) + "\n");
+        picture.SaveBMP(name + "/" + std::to_string(index) + ".bmp");
+        TFileWriter fOut(name + "/" + std::to_string(index) + ".txt");
+        fOut.Write(std::to_string(bestIndex) + "\t" + std::to_string(best) + "\t" + std::to_string(nextToBest) + "\n");
         for (size_t i = 0; i < probes.size(); ++i)
         {
-            fOut.Write( ToString(i) + "\t" + ToString(probes[i]) + "\n" );
+            fOut.Write( std::to_string(i) + "\t" + std::to_string(probes[i]) + "\n" );
         }
         picture.Write(fOut);
     }
@@ -1117,10 +1074,10 @@ struct TNeuralEstimator : public IProbEstimator
 
         void Save(TFileWriter& fOut) const
         {
-            fOut.Write(ToString(m_sinapses.size()) + "\n");
+            fOut.Write(std::to_string(m_sinapses.size()) + "\n");
             for (size_t i = 0; i < m_sinapses.size(); ++i)
             {
-                fOut.Write("\t" + ToString(m_sinapses[i].m_weight) + "\n");
+                fOut.Write("\t" + std::to_string(m_sinapses[i].m_weight) + "\n");
             }
         }
 
@@ -1259,7 +1216,7 @@ struct TNeuralEstimator : public IProbEstimator
     void Save(const std::string& filename) const
     {
         TFileWriter fOut(filename);
-        fOut.Write( ToString(m_neurons.size()) + "\n" );
+        fOut.Write( std::to_string(m_neurons.size()) + "\n" );
         for (size_t i = 0; i < m_neurons.size(); ++i)
         {
             m_neurons[i].Save(fOut);
@@ -1451,7 +1408,7 @@ TEST(NeuralNet, SaveLoad)
 template<typename T>
 void Shuffle(vector<T>& v)
 {
-    for (ssize_t i = (ssize_t)v.size() - 1; i >= 1; --i)
+    for (ssize_t i = static_cast<ssize_t>(v.size()) - 1; i >= 1; --i)
     {
         size_t index = rand() % i;
         swap(v[index], v[i]);
@@ -1460,7 +1417,7 @@ void Shuffle(vector<T>& v)
 
 void MakePictures(const TRows& rows, TPictures* pictures, bool test)
 {
-    TTimer timerLearn("MakePictures " + ToString(rows.size()));
+    TTimer timerLearn("MakePictures " + std::to_string(rows.size()));
     pictures->clear();
     for (size_t i = 0; i < rows.size(); ++i)
     {
@@ -1566,7 +1523,7 @@ int main(int argc, char* argv[])
                 {
                     TPicture p(testData.m_rows[i], true);
                     TBest best = Choose(pEstimators, p, "test", i);
-                    writer.Put( ToString(best.first) );
+                    writer.Put( std::to_string(best.first) );
                     writer.NewLine();
                     if (verbose)
                     {
@@ -1634,7 +1591,7 @@ int main(int argc, char* argv[])
                 estimator.Prepare();
                 if (!loadFrom.empty())
                 {
-                    estimator.Load(loadFrom + ToString(digit));
+                    estimator.Load(loadFrom + std::to_string(digit));
                 }
             }
         }
@@ -1662,11 +1619,11 @@ int main(int argc, char* argv[])
                         ratio = 1.1f;
                 }
                 {
-                    TTimer timerLearn("Learn iteration " + ToString(iLearnIt));
+                    TTimer timerLearn("Learn iteration " + std::to_string(iLearnIt));
                     for (size_t digit = 0; digit < 10; ++digit)
                     {
                         TNeuralEstimator& estimator = estimators[digit];
-                        TTimer timerLearn2("Learn iteration " + ToString(iLearnIt) + " digit " + ToString(digit));
+                        TTimer timerLearn2("Learn iteration " + std::to_string(iLearnIt) + " digit " + std::to_string(digit));
                         estimator.Inflate();
                         for (size_t i = 0; i < pLearn.size(); ++i)
                         {
@@ -1687,13 +1644,13 @@ int main(int argc, char* argv[])
                                 fflush(stdout);
                             }
                         }
-                        const string name = "debug/learn" + ToString(iLearnIt);
+                        const string name = "debug/learn" + std::to_string(iLearnIt);
                         MkDir(name);
-                        estimator.Save(name + "/NN" + ToString(digit));
+                        estimator.Save(name + "/NN" + std::to_string(digit));
                     }
                 }
                 {
-                    TTimer timerTest("Test iteration " + ToString(iLearnIt));
+                    TTimer timerTest("Test iteration " + std::to_string(iLearnIt));
                     for (size_t digit = 0; digit < 10; ++digit)
                     {
                         float error = 0.f;
@@ -1725,10 +1682,10 @@ int main(int argc, char* argv[])
                             const float dError = Sqr(result - netResult);
                             if (dError > 0.25f)
                             {
-                                const string name = "debug/learn" + ToString(iLearnIt);
-                                p.SaveBMP(name + "/" + ToString(index) + ".bmp");
-                                TFileWriter fOut(name + "/" + ToString(index) + "_" + ToString(digit) + ".txt");
-                                fOut.Write( ToString(index) + "\t" + ToString(p.Digit()) + "\t" + ToString(digit) + "\t" + ToString(result) + "\t" + ToString(netResult) + "\n" );
+                                const string name = "debug/learn" + std::to_string(iLearnIt);
+                                p.SaveBMP(name + "/" + std::to_string(index) + ".bmp");
+                                TFileWriter fOut(name + "/" + std::to_string(index) + "_" + std::to_string(digit) + ".txt");
+                                fOut.Write( std::to_string(index) + "\t" + std::to_string(p.Digit()) + "\t" + std::to_string(digit) + "\t" + std::to_string(result) + "\t" + std::to_string(netResult) + "\n" );
                                 p.Write(fOut);
                             }
                             error += dError;
@@ -1738,7 +1695,7 @@ int main(int argc, char* argv[])
                     }
                 }
                 {
-                    TTimer timerApply("Apply " + ToString(iLearnIt));
+                    TTimer timerApply("Apply " + std::to_string(iLearnIt));
                     TCSVWriter writer("neural.csv");
                     IProbEstimators pEstimators(10);
                     for (size_t i = 0; i < 10; ++i)
@@ -1761,8 +1718,8 @@ int main(int argc, char* argv[])
                         }
 
                         const TPicture& p = pTest[i];
-                        TBest best = Choose(pEstimators, p, "debug/testNN" + ToString(iLearnIt), i);
-                        writer.Put( ToString(best.first) );
+                        TBest best = Choose(pEstimators, p, "debug/testNN" + std::to_string(iLearnIt), i);
+                        writer.Put( std::to_string(best.first) );
                         writer.NewLine();
                         if (verbose)
                         {
@@ -1772,9 +1729,9 @@ int main(int argc, char* argv[])
 
                         for (size_t j = 0; j < 10; ++j)
                         {
-                            fOut.Write(ToString(i) + "\t" + ToString(j) + "\t" + ToString(estimators[j].Estimate(p)) + "\n");
+                            fOut.Write(std::to_string(i) + "\t" + std::to_string(j) + "\t" + std::to_string(estimators[j].Estimate(p)) + "\n");
                         }
-                        fOut.Write(ToString(i) + "\t" + ToString(best.first) + "\t" + ToString(best.second) + "\n");
+                        fOut.Write(std::to_string(i) + "\t" + std::to_string(best.first) + "\t" + std::to_string(best.second) + "\n");
                         p.Draw(fOut.GetHandle());
                         p.DrawLine(fOut.GetHandle());
                     }
@@ -1829,11 +1786,11 @@ int main(int argc, char* argv[])
         }
 
         {
-            TTimer timerLearn("Learn " + ToString(pLearn.size()));
+            TTimer timerLearn("Learn " + std::to_string(pLearn.size()));
             for (size_t iLearnIt = 0; iLearnIt < 100; ++iLearnIt)
             {
                 {
-                    TTimer timerLearn("Learn iteration " + ToString(iLearnIt));
+                    TTimer timerLearn("Learn iteration " + std::to_string(iLearnIt));
                     estimator.Inflate();
                     for (size_t i = 0; i < pLearn.size(); ++i)
                     {
@@ -1851,7 +1808,7 @@ int main(int argc, char* argv[])
                     }
                 }
                 {
-                    TTimer timerLearn("Test iteration " + ToString(iLearnIt));
+                    TTimer timerLearn("Test iteration " + std::to_string(iLearnIt));
                     float error = 0.f;
                     for (size_t i = 0; i < pTest.size(); ++i)
                     {

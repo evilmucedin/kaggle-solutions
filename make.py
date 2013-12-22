@@ -9,7 +9,7 @@ def mkdir(dir):
 
 def run(cmd):
     import subprocess
-    print cmd
+    print(cmd)
     proc = subprocess.Popen(cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
     returncode = proc.wait()
     if 0 != returncode:
@@ -25,7 +25,7 @@ def getCPUCount():
     return 8
 
 APP_NAME = "kaggle-solutions"
-ROOT_FOLDER = "/%s" % APP_NAME
+ROOT_FOLDER = os.sep + "%s" % APP_NAME
 
 def splitCwd(cwd, buildDir):
     i = cwd.find(ROOT_FOLDER)
@@ -56,14 +56,16 @@ def mainCMake():
     
     buildHome, projectParts = splitCwd(os.getcwd(), "%s-%s" % (APP_NAME, mode.lower()))
     mkdir(buildHome)
-    print >> sys.stderr, "buildHome=%s\nprojectParts=%s\n" % (buildHome, projectParts)
+    print("buildHome=%s\nprojectParts=%s\n" % (buildHome, projectParts), file=sys.stderr)
     
     makeOnly = ""
     gen = ""
     if options.eclipse:
         sMode = "Debug"
         gen = "-G \"Eclipse CDT4 - Unix Makefiles\""
-    run("cd %s; cmake -DCMAKE_BUILD_TYPE=%s %s ../%s" % (buildHome, mode, gen, APP_NAME))
+    runFolder = os.path.join("..", APP_NAME)
+    os.chdir(buildHome)
+    run("cmake -DCMAKE_BUILD_TYPE=%s %s %s" % (mode, gen, runFolder))
 
     threadCount = getCPUCount()
     if not options.eclipse:
