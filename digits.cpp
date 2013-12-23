@@ -16,6 +16,7 @@
 #include "exceptions.h"
 #include "str.h"
 #include "random.h"
+#include "math.h"
 
 using namespace std;
 using namespace testing;
@@ -85,13 +86,28 @@ struct TTokenReader
 
 typedef vector<float> TFloatVector;
 
+struct TPicture;
+
+struct IProbEstimator
+{
+    virtual float Estimate(const TPicture& picture) const = 0;
+
+    virtual ~IProbEstimator()
+    {
+    }
+};
+
+typedef vector<IProbEstimator*> IProbEstimators;
+
 struct TPicture
 {
     static const size_t SIZE = 28;
     static const size_t SIZE2MUL = 4;
     static const size_t SIZE2 = SIZE/SIZE2MUL;
     // static const size_t VECTOR_SIZE = SIZE*SIZE;
-    static const size_t VECTOR_SIZE = SIZE*SIZE + 2*SIZE2*SIZE2 + 1 + 10;
+    static const size_t VECTOR_SIZE0 = 1 + SIZE*SIZE + 2*SIZE2*SIZE2 + 1 + 10 + 10;
+    static const size_t VECTOR_SIZE1 = 10;
+    static const size_t VECTOR_SIZE = VECTOR_SIZE0 + VECTOR_SIZE1;
 
     typedef vector<TUi8Data> TUi8Matrix;
     TUi8Matrix m_matrix;
@@ -136,6 +152,7 @@ struct TPicture
     {
         m_features.resize(VECTOR_SIZE);
         size_t index = 0;
+        m_features[index++] = 1.f;
         float sum = 0;
         for (size_t i = 0; i < SIZE; ++i)
         {
@@ -203,6 +220,14 @@ struct TPicture
         index += 10;
 
         m_matrix.swap(backup);
+    }
+
+    void CalcFeaturesPhase2(const IProbEstimators& probEstimators)
+    {
+        for (size_t i = 0; i < probEstimators.size(); ++i)
+        {
+            m_features[VECTOR_SIZE0 + i] = probEstimators[i]->Estimate(*this);
+        }
     }
 
     int Digit() const
@@ -358,41 +383,8 @@ struct TPicture
 
 typedef vector<TPicture> TPictures;
 
-void SplitLearnTest(const TRows& input, float ratio, TRows* learn, TRows* test)
-{
-    TTimer timer("SplitTestLearn");
-    learn->clear();
-    test->clear();
-    for (TRows::const_iterator toRow = input.begin(); toRow != input.end(); ++toRow)
-    {
-        if (Rand01() < ratio)
-        {
-            learn->push_back(*toRow);
-        }
-        else
-        {
-            test->push_back(*toRow);
-        }
-    }
-}
-
-struct IProbEstimator
-{
-    virtual float Estimate(const TPicture& picture) const = 0;
-
-    virtual ~IProbEstimator()
-    {
-    }
-};
-
 typedef vector<float> TFloatVector;
 typedef vector<TFloatVector> TFloatMatrix;
-
-template<typename T>
-T Sqr(T x)
-{
-    return x*x;
-}
 
 struct TCosineEstimator : public IProbEstimator
 {
@@ -490,9 +482,25 @@ struct TCosineEstimator : public IProbEstimator
     }
 };
 
-typedef pair<size_t, float> TBest;
+void SplitLearnTest(const TRows& input, float ratio, TRows* learn, TRows* test)
+{
+    TTimer timer("SplitTestLearn");
+    learn->clear();
+    test->clear();
+    for (TRows::const_iterator toRow = input.begin(); toRow != input.end(); ++toRow)
+    {
+        if (Rand01() < ratio)
+        {
+            learn->push_back(*toRow);
+        }
+        else
+        {
+            test->push_back(*toRow);
+        }
+    }
+}
 
-typedef vector<IProbEstimator*> IProbEstimators;
+typedef pair<size_t, float> TBest;
 
 TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& name, size_t index)
 {
@@ -509,6 +517,10 @@ TBest Choose(IProbEstimators estimators, const TPicture& picture, const string& 
             nextToBest = best;
             best = prob;
             bestIndex = i;
+        }
+        else
+        {
+            nextToBest = std::max(prob, nextToBest);
         }
     }
     if ((best < 0.8f) || (nextToBest + 0.2f > best))
@@ -580,10 +592,10 @@ struct TNeuralEstimator : public IProbEstimator
 
         void Save(TFileWriter& fOut) const
         {
-            fOut.Write(std::to_string(m_sinapses.size()) + "\n");
+            fOut.Write(std::string("\t") + std::to_string(m_sinapses.size()) + "\n");
             for (size_t i = 0; i < m_sinapses.size(); ++i)
             {
-                fOut.Write("\t" + std::to_string(m_sinapses[i].m_weight) + "\n");
+                fOut.Write(std::string("\t\t") + std::to_string(m_sinapses[i].m_weight) + "\n");
             }
         }
 
@@ -616,11 +628,6 @@ struct TNeuralEstimator : public IProbEstimator
     void Add(const TNeuron& neuron)
     {
         m_neurons.push_back(neuron);
-    }
-
-    static float Sigmoid(float value)
-    {
-        return 1.f / (1.f + expf(-value));
     }
 
     void Prepare()
@@ -933,6 +940,8 @@ void MakePictures(const TRows& rows, TPictures* pictures, bool test)
 
 int main(int argc, char* argv[])
 {
+    setpriority(PRIO_PROCESS, 0, 20);
+
     TCommandLineParser parser(argc, argv);
     const bool unittests = parser.Has('u', "unittests", "run unittests");
     const bool draw = parser.Has('d', "draw", "draw train");
@@ -1060,6 +1069,35 @@ int main(int argc, char* argv[])
             }
             pLearn.insert(pLearn.end(), pHand.begin(), pHand.end());
         }
+        {
+            TCosineEstimator estimators[10];
+            IProbEstimators pEstimators(10);
+            {
+                TTimer timerCosine("Learn cosine");
+                {
+                    for (size_t i = 0; i < pLearn.size(); ++i)
+                    {
+                        estimators[pLearn[i].Digit()].Learn(pLearn[i]);
+                    }
+                }
+            }
+            for (size_t i = 0; i < 10; ++i)
+            {
+                estimators[i].EndLearn();
+                pEstimators[i] = &estimators[i];
+            }
+            {
+                TTimer timerCosine("Update features");
+                for (size_t i = 0; i < pLearn.size(); ++i)
+                {
+                    pLearn[i].CalcFeaturesPhase2(pEstimators);
+                }
+                for (size_t i = 0; i < pTest.size(); ++i)
+                {
+                    pTest[i].CalcFeaturesPhase2(pEstimators);
+                }
+            }
+        }
         printf("Train=%d, Test=%d\n", static_cast<int>(pLearn.size()), static_cast<int>(pTest.size()));
         vector<TNeuralEstimator> estimators(10);
         {
@@ -1069,8 +1107,8 @@ int main(int argc, char* argv[])
                 TNeuralEstimator& estimator = estimators[digit];
 
                 estimator.SetInputSize(TPicture::VECTOR_SIZE);
-                size_t prevLayerBegin = 0;
-                size_t prevLayerSize = TPicture::VECTOR_SIZE;
+                size_t prevLayerBegin = 1;
+                size_t prevLayerSize = TPicture::VECTOR_SIZE - 1;
                 for (size_t i = 0; i <= 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
@@ -1082,6 +1120,7 @@ int main(int argc, char* argv[])
                         {
                             neuron.AddSinapse(prevLayerBegin + j, ( (k + j + i) % TPicture::VECTOR_SIZE ) ? 0.f : 1.f);
                         }
+                        neuron.AddSinapse(0, 0.000001f);
                         estimator.Add(neuron);
                     }
                     prevLayerBegin = layerBegin;
@@ -1198,6 +1237,7 @@ int main(int argc, char* argv[])
                 {
                     TTimer timerApply("Apply " + std::to_string(iLearnIt));
                     TCSVWriter writer("neural.csv");
+                    writer.Put("ImageId,Label\n");
                     IProbEstimators pEstimators(10);
                     for (size_t i = 0; i < 10; ++i)
                     {
@@ -1215,7 +1255,7 @@ int main(int argc, char* argv[])
 
                         const TPicture& p = pTest[i];
                         TBest best = Choose(pEstimators, p, testName, i);
-                        writer.Put( std::to_string(best.first) );
+                        writer.Put( std::to_string(i + 1) + "," + std::to_string(best.first) );
                         writer.NewLine();
                         if (verbose)
                         {
