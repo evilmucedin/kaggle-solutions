@@ -88,7 +88,8 @@ typedef vector<float> TFloatVector;
 struct TPicture
 {
     static const size_t SIZE = 28;
-    static const size_t SIZE2 = 7;
+    static const size_t SIZE2MUL = 4;
+    static const size_t SIZE2 = SIZE/SIZE2MUL;
     // static const size_t VECTOR_SIZE = SIZE*SIZE;
     static const size_t VECTOR_SIZE = SIZE*SIZE + 2*SIZE2*SIZE2 + 1 + 10;
 
@@ -151,9 +152,9 @@ struct TPicture
             for (size_t j = 0; j < SIZE2; ++j)
             {
                 size_t sum = 0;
-                for (size_t x = 0; x < 4; ++x)
+                for (size_t x = 0; x < SIZE2MUL; ++x)
                 {
-                    for (size_t y = 0; y < 4; ++y)
+                    for (size_t y = 0; y < SIZE2MUL; ++y)
                     {
                         sum += m_matrix[4*i + x][4*j + y];
                     }
@@ -169,9 +170,9 @@ struct TPicture
             for (size_t j = 0; j < SIZE2; ++j)
             {
                 size_t sum = 0;
-                for (size_t x = 0; x < 4; ++x)
+                for (size_t x = 0; x < SIZE2MUL; ++x)
                 {
-                    for (size_t y = 0; y < 4; ++y)
+                    for (size_t y = 0; y < SIZE2MUL; ++y)
                     {
                         sum += m_matrix[4*i + x][4*j + y];
                     }
@@ -1059,6 +1060,7 @@ int main(int argc, char* argv[])
             }
             pLearn.insert(pLearn.end(), pHand.begin(), pHand.end());
         }
+        printf("Train=%d, Test=%d\n", static_cast<int>(pLearn.size()), static_cast<int>(pTest.size()));
         vector<TNeuralEstimator> estimators(10);
         {
             TTimer timerLearn("Configure neural net");
@@ -1069,10 +1071,10 @@ int main(int argc, char* argv[])
                 estimator.SetInputSize(TPicture::VECTOR_SIZE);
                 size_t prevLayerBegin = 0;
                 size_t prevLayerSize = TPicture::VECTOR_SIZE;
-                for (size_t i = 0; i < 2; ++i)
+                for (size_t i = 0; i <= 2; ++i)
                 {
                     const size_t layerBegin = estimator.Size();
-                    const size_t layerSize = (i == 0) ? TPicture::VECTOR_SIZE : 100;
+                    const size_t layerSize = (i == 2) ? 1 : ( (i == 0) ? TPicture::VECTOR_SIZE : 100 );
                     for (size_t k = 0; k < layerSize; ++k)
                     {
                         TNeuralEstimator::TNeuron neuron;
@@ -1084,14 +1086,6 @@ int main(int argc, char* argv[])
                     }
                     prevLayerBegin = layerBegin;
                     prevLayerSize = layerSize;
-                }
-                {
-                    TNeuralEstimator::TNeuron neuronOutput;
-                    for (size_t j = 0; j < prevLayerSize; ++j)
-                    {
-                        neuronOutput.AddSinapse(prevLayerBegin + j);
-                    }
-                    estimator.Add(neuronOutput);
                 }
                 estimator.Prepare();
                 if (!loadFrom.empty())
@@ -1123,21 +1117,32 @@ int main(int argc, char* argv[])
                     default:
                         ratio = 1.1f;
                 }
+                const string name = "debug/learn" + std::to_string(iLearnIt);
+                MkDir(name);
                 {
-                    TTimer timerLearn("Learn iteration " + std::to_string(iLearnIt));
+                    TTimer timerLearn("Learn iteration " + std::to_string(iLearnIt) + " " + std::to_string(ratio));
                     for (size_t digit = 0; digit < 10; ++digit)
                     {
                         TNeuralEstimator& estimator = estimators[digit];
                         TTimer timerLearn2("Learn iteration " + std::to_string(iLearnIt) + " digit " + std::to_string(digit));
                         estimator.Inflate();
+
+                        vector<size_t> indexes(pLearn.size());
+                        for (size_t i = 0; i < indexes.size(); ++i)
+                        {
+                            indexes[i] = i;
+                        }
+                        Shuffle(indexes);
+
                         for (size_t i = 0; i < pLearn.size(); ++i)
                         {
-                            const TPicture& p = pLearn[i];
                             if (Rand01() > ratio)
                             {
                                 continue;
                             }
-                            const float value = (pLearn[i].Digit() == digit) ? 1.f : 0.f;
+
+                            const TPicture& p = pLearn[indexes[i]];
+                            const float value = (p.Digit() == digit) ? 1.f : 0.f;
                             if (!(i % 100))
                             {
                                 printf("before %f %f %f\n", (float)i/pLearn.size(), value, estimator.GetOutput(p.AsVector()));
@@ -1149,8 +1154,6 @@ int main(int argc, char* argv[])
                                 fflush(stdout);
                             }
                         }
-                        const string name = "debug/learn" + std::to_string(iLearnIt);
-                        MkDir(name);
                         estimator.Save(name + "/NN" + std::to_string(digit));
                     }
                 }
@@ -1160,12 +1163,6 @@ int main(int argc, char* argv[])
                     {
                         float error = 0.f;
                         size_t num = 0;
-                        vector<size_t> indexes(pLearn.size());
-                        for (size_t i = 0; i < indexes.size(); ++i)
-                        {
-                            indexes[i] = i;
-                        }
-                        Shuffle(indexes);
                         for (size_t i = 0; i < pLearn.size(); ++i)
                         {
                             if (Rand01() > 2.f*ratio)
@@ -1173,8 +1170,7 @@ int main(int argc, char* argv[])
                                 continue;
                             }
 
-                            const size_t index = indexes[i];
-                            const TPicture& p = pLearn[indexes[i]];
+                            const TPicture& p = pLearn[i];
 
                             if (i && !(i % 4000))
                             {
@@ -1187,10 +1183,9 @@ int main(int argc, char* argv[])
                             const float dError = Sqr(result - netResult);
                             if (dError > 0.25f)
                             {
-                                const string name = "debug/learn" + std::to_string(iLearnIt);
-                                p.SaveBMP(name + "/" + std::to_string(index) + ".bmp");
-                                TFileWriter fOut(name + "/" + std::to_string(index) + "_" + std::to_string(digit) + ".txt");
-                                fOut.Write( std::to_string(index) + "\t" + std::to_string(p.Digit()) + "\t" + std::to_string(digit) + "\t" + std::to_string(result) + "\t" + std::to_string(netResult) + "\n" );
+                                p.SaveBMP(name + "/" + std::to_string(i) + ".bmp");
+                                TFileWriter fOut(name + "/" + std::to_string(i) + "_" + std::to_string(digit) + ".txt");
+                                fOut.Write( std::to_string(i) + "\t" + std::to_string(p.Digit()) + "\t" + std::to_string(digit) + "\t" + std::to_string(result) + "\t" + std::to_string(netResult) + "\n" );
                                 p.Write(fOut);
                             }
                             error += dError;
@@ -1199,6 +1194,7 @@ int main(int argc, char* argv[])
                         printf("Error %d %d: %f %f\n", (int)iLearnIt, (int)digit, error, error/num);
                     }
                 }
+                const string testName = "debug/testNN" + std::to_string(iLearnIt);
                 {
                     TTimer timerApply("Apply " + std::to_string(iLearnIt));
                     TCSVWriter writer("neural.csv");
@@ -1217,13 +1213,8 @@ int main(int argc, char* argv[])
                             fflush(stdout);
                         }
 
-                        if (Rand01() > 2.f*ratio)
-                        {
-                            continue;
-                        }
-
                         const TPicture& p = pTest[i];
-                        TBest best = Choose(pEstimators, p, "debug/testNN" + std::to_string(iLearnIt), i);
+                        TBest best = Choose(pEstimators, p, testName, i);
                         writer.Put( std::to_string(best.first) );
                         writer.NewLine();
                         if (verbose)
