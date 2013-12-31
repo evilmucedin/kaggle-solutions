@@ -125,7 +125,7 @@ struct TCommandLineParser
         return defaultValue;
     }
 
-    bool AutoUsage()
+    void AutoUsage()
     {
         if (m_error || Has('?', "--help", "print usage help"))
         {

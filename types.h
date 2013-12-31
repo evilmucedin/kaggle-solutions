@@ -1,5 +1,6 @@
 #pragma once
 
+#include <type_traits>
 
 typedef unsigned char ui8;
 static_assert(1 == sizeof(ui8), "ui8 bad size");
