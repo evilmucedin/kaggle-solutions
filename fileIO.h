@@ -41,7 +41,7 @@ struct TFileReader
 
     bool Eof()
     {
-        return feof(m_file);
+        return 0 != feof(m_file);
     }
 
     char ReadChar()

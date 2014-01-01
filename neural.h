@@ -119,7 +119,7 @@ struct TNeuralEstimator : public IProbEstimator
             }
             delta[i] = data[i]*(1.f - data[i])*sum;
         }
-        const float learnRate = 0.5f/sqrtf(iteration + 1);
+        const float learnRate = 0.5f/sqrtf(static_cast<float>(iteration) + 1.f);
         for (size_t i = m_inputSize; i < m_neurons.size(); ++i)
         {
             // printf("%d %f %f %d %d\n", (int)i, data[i], delta[i], m_neurons[i].m_sinapses.size(), m_neurons[i].m_invertedSinapses.size());
