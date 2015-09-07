@@ -7,86 +7,175 @@ from sklearn.cross_validation import train_test_split
 from concurrent.futures import ThreadPoolExecutor 
 import xgboost
 from time import process_time
+from numpy.f2py.auxfuncs import isinteger
 
 # Data cleanup
 # TRAIN DATA
 train_df = pd.read_csv('../train.csv', header=0)        # Load the train file into a dataframe
+medianAge = train_df['Age'].dropna().median()
+medianFare = train_df['Fare'].dropna().median()
 
-# I need to convert all strings to integer classifiers.
-# I need to fill in the missing values of the data and make it complete.
+def isinteger(s):
+    try:
+        if len(s) == 0:
+            return False
+        for ch in s:
+            if ch < '0' or ch > '9':
+                return False
+            return True
+    except:
+        return False
+    
+def hasA(s):
+    try:
+        return s.find("A") >= 0
+    except:
+        return False
 
-# female = 0, Male = 1
-train_df['Gender'] = train_df['Sex'].map( {'female': 0, 'male': 1} ).astype(int)
+def hasB(s):
+    try:
+        return s.find("B") >= 0
+    except:
+        return False
 
-# Embarked from 'C', 'Q', 'S'
-# Note this is not ideal: in translating categories to numbers, Port "2" is not 2 times greater than Port "1", etc.
+def hasC(s):
+    try:
+        return s.find("C") >= 0
+    except:
+        return False
 
-# All missing Embarked -> just make them embark from most common place
-if len(train_df.Embarked[ train_df.Embarked.isnull() ]) > 0:
-    train_df.Embarked[ train_df.Embarked.isnull() ] = train_df.Embarked.dropna().mode().values
+def hasD(s):
+    try:
+        return s.find("D") >= 0
+    except:
+        return False
 
-Ports = list(enumerate(np.unique(train_df['Embarked'])))    # determine all values of Embarked,
-Ports_dict = { name : i for i, name in Ports }              # set up a dictionary in the form  Ports : index
-train_df.Embarked = train_df.Embarked.map( lambda x: Ports_dict[x]).astype(int)     # Convert all Embark strings to int
+def hasE(s):
+    try:
+        return s.find("E") >= 0
+    except:
+        return False
 
-# All the ages with no data -> make the median of all Ages
-median_age = train_df['Age'].dropna().median()
-if len(train_df.Age[ train_df.Age.isnull() ]) > 0:
-    train_df.loc[ (train_df.Age.isnull()), 'Age'] = median_age
+def hasF(s):
+    try:
+        return s.find("F") >= 0
+    except:
+        return False
 
-# Remove the Name column, Cabin, Ticket, and Sex (since I copied and filled it to Gender)
-train_df = train_df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'PassengerId'], axis=1) 
+def hasMr(s):
+    try:
+        return s.find("Mr.") >= 0
+    except:
+        return False
+
+def hasMrs(s):
+    try:
+        return s.find("Mrs.") >= 0
+    except:
+        return False
+
+def hasMiss(s):
+    try:
+        return s.find("Miss.") >= 0
+    except:
+        return False
+
+def hasPC(s):
+    try:
+        return s.find("PC ") >= 0
+    except:
+        return False
+
+def hasST(s):
+    try:
+        return s.find("ST") >= 0
+    except:
+        return False
+
+def hasSpace(s):
+    try:
+        return s.find(" ") >= 0
+    except:
+        return False
+
+def lenSp(s):
+    try:
+        return len(list(filter(lambda ch: ch == ' ', s)))
+    except:
+        return False
+
+def lenQuote(s):
+    try:
+        return len(list(filter(lambda ch: ch == '"', s)))
+    except:
+        return False
 
 
-# TEST DATA
-test_df = pd.read_csv('../test.csv', header=0)        # Load the test file into a dataframe
+def prepare(df):
+    # I need to convert all strings to integer classifiers.
+    # I need to fill in the missing values of the data and make it complete.
+    
+    # female = 0, Male = 1
+    df['Gender'] = df['Sex'].map( {'female': 0, 'male': 1} ).astype(int)
+    df['CabinType'] = df['Cabin'].isnull().astype(int)
+    df['CabinType2'] = df['Cabin'].apply(hasSpace).astype(int)
+    df['CabinA'] = df['Cabin'].apply(hasA).astype(int)
+    df['CabinB'] = df['Cabin'].apply(hasB).astype(int)
+    df['CabinC'] = df['Cabin'].apply(hasC).astype(int)
+    df['CabinD'] = df['Cabin'].apply(hasD).astype(int)
+    df['CabinE'] = df['Cabin'].apply(hasE).astype(int)
+    df['CabinF'] = df['Cabin'].apply(hasF).astype(int)
+    df['TicketType'] = df['Ticket'].apply(isinteger).astype(int)
+    df['TicketPC'] = df['Ticket'].apply(hasPC).astype(int)
+    df['TicketST'] = df['Ticket'].apply(hasST).astype(int)
+    df['TicketSp'] = df['Ticket'].apply(hasSpace).astype(int)
+    df['HasMr'] = df['Name'].apply(hasMr).astype(int)
+    df['HasMrs'] = df['Name'].apply(hasMrs).astype(int)
+    df['HasMiss'] = df['Name'].apply(hasMiss).astype(int)
+    df['NameLen'] = df['Name'].apply(len).astype(int)
+    df['NameSpLen'] = df['Name'].apply(lenSp).astype(int)
+    df['NameQuoteLen'] = df['Name'].apply(lenQuote).astype(int)
+    
+    # Embarked from 'C', 'Q', 'S'
+    # Note this is not ideal: in translating categories to numbers, Port "2" is not 2 times greater than Port "1", etc.
+    
+    # All missing Embarked -> just make them embark from most common place
+    if len(df.Embarked[ df.Embarked.isnull() ]) > 0:
+        df.Embarked[ df.Embarked.isnull() ] = df.Embarked.dropna().mode().values
+    
+    ports = list(enumerate(np.unique(df['Embarked'])))    # determine all values of Embarked,
+    dictPorts = { name : i for i, name in ports }              # set up a dictionary in the form  ports : index
+    df.Embarked = df.Embarked.map( lambda x: dictPorts[x]).astype(int)     # Convert all Embark strings to int
+    
+    # All the ages with no data -> make the median of all Ages
+    df['HasAge'] = df.Age.isnull().astype(int)
+    if len(df.Age[ df.Age.isnull() ]) > 0:
+        df.loc[ (df.Age.isnull()), 'Age'] = medianAge
+    if len(df.Fare[ df.Fare.isnull() ]) > 0:
+        df.loc[ (df.Fare.isnull()), 'Fare'] = medianFare
+    
+    # Remove the Name column, Cabin, Ticket, and Sex (since I copied and filled it to Gender)
+    return df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'PassengerId'], axis=1) 
 
-# I need to do the same with the test data now, so that the columns are the same as the training data
-# I need to convert all strings to integer classifiers:
-# female = 0, Male = 1
-test_df['Gender'] = test_df['Sex'].map( {'female': 0, 'male': 1} ).astype(int)
 
-# Embarked from 'C', 'Q', 'S'
-# All missing Embarked -> just make them embark from most common place
-if len(test_df.Embarked[ test_df.Embarked.isnull() ]) > 0:
-    test_df.Embarked[ test_df.Embarked.isnull() ] = test_df.Embarked.dropna().mode().values
-# Again convert all Embarked strings to int
-test_df.Embarked = test_df.Embarked.map( lambda x: Ports_dict[x]).astype(int)
-
-
-# All the ages with no data -> make the median of all Ages
-median_age = test_df['Age'].dropna().median()
-if len(test_df.Age[ test_df.Age.isnull() ]) > 0:
-    test_df.loc[ (test_df.Age.isnull()), 'Age'] = median_age
-
-# All the missing Fares -> assume median of their respective class
-if len(test_df.Fare[ test_df.Fare.isnull() ]) > 0:
-    median_fare = np.zeros(3)
-    for f in range(0,3):                                              # loop 0 to 2
-        median_fare[f] = test_df[ test_df.Pclass == f+1 ]['Fare'].dropna().median()
-    for f in range(0,3):                                              # loop 0 to 2
-        test_df.loc[ (test_df.Fare.isnull()) & (test_df.Pclass == f+1 ), 'Fare'] = median_fare[f]
-
-# Collect the test data's PassengerIds before dropping it
-ids = test_df['PassengerId'].values
-# Remove the Name column, Cabin, Ticket, and Sex (since I copied and filled it to Gender)
-test_df = test_df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'PassengerId'], axis=1) 
-
+train_df = prepare(train_df)
+train_df.to_csv("../trainConverted.csv")
 
 # The data is now ready to go. So lets fit to the train, then predict to the test!
 # Convert back to a numpy array
 train_data = train_df.values
 
-trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(train_data[0::,1::], train_data[0::,0], test_size=0.2)
+trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(train_data[0::, 1::], train_data[0::, 0], test_size=0.2)
 
 bestNIterations = 1
 bestScore = 0
 bestC = None
 
+global bestScore, bestNIterations, bestC
+
 tp = ThreadPoolExecutor(2)
 
-global bestScore, bestNIterations, bestC
-for nIterations in [1, 5, 10, 50, 100, 150, 200, 250, 400, 500, 700, 1000]:
+for nIterations in [1, 3, 5, 6, 7, 10, 20, 40, 50, 75, 100, 150, 200, 250, 400, 500, 600, 700, 1000]:
     for c in [RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, xgboost.XGBClassifier]:
     # for c in [RandomForestClassifier]:
     # for c in [xgboost.XGBClassifier]:    
@@ -107,14 +196,7 @@ for nIterations in [1, 5, 10, 50, 100, 150, 200, 250, 400, 500, 700, 1000]:
                 bestNIterations = nIterations
                 bestC = c
                 
-        if c == GradientBoostingClassifier:
-            if nIterations < 100:
-                tp.submit(calc, nIterations, c)  
-        elif c == AdaBoostClassifier:
-            if nIterations < 1000:
-                tp.submit(calc, nIterations, c)
-        else:  
-            tp.submit(calc, nIterations, c)
+        tp.submit(calc, nIterations, c)  
             
 tp.shutdown()
 print("best", bestC, bestNIterations, bestScore)
@@ -124,12 +206,41 @@ forest = bestC(n_estimators=bestNIterations)
 forest = forest.fit(train_data[0::, 1::], train_data[0::, 0])
 
 print('Predicting...')
-test_data = test_df.values
-output = forest.predict(test_data).astype(int)
+# TEST DATA
+test_df = pd.read_csv('../test.csv', header=0)        # Load the test file into a dataframe
+ids = test_df['PassengerId'].values
 
+test_df = prepare(test_df)
+test_df.to_csv("../testConverted.csv")
+
+test_data = test_df.values
+fOut = open("../debug", "w")
+for x in test_data:
+    for y in x:
+        print(y, file=fOut)
+fOut.close()
+
+def _assert_all_finite(X):
+    """Like assert_all_finite, but only for ndarray."""
+    X = np.asanyarray(X)
+    # First try an O(n) time, O(1) space solution for the common case that
+    # everything is finite; fall back to O(n) space np.isfinite to prevent
+    # false positives from overflow in sum method.
+    for ix, x in enumerate(X):
+        for iy, y in enumerate(x):
+            if not np.isfinite(y):
+                raise ValueError("%d %d %f %d %d" % (ix, iy, y, len(X), len(x)))
+    if (X.dtype.char in np.typecodes['AllFloat'] and not np.isfinite(X.sum())
+            and not np.isfinite(X).all()):
+        raise ValueError("Input contains NaN, infinity"
+                         " or a value too large for %r. %f" % (X.dtype, X.sum()))
+
+_assert_all_finite(test_data)
+
+output = [[ids[index], 1 if (x[1] > 0.5) else 0] for index, x in enumerate(forest.predict_proba(test_data))]
 predictions_file = open("../myfirstforest.csv", "w")
 open_file_object = csv.writer(predictions_file)
 open_file_object.writerow(["PassengerId", "Survived"])
-open_file_object.writerows(zip(ids, output))
+open_file_object.writerows(output)
 predictions_file.close()
 print('Done.')
