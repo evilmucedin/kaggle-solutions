@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 import pandas as pd
 import numpy as np
 import csv as csv
@@ -109,7 +110,128 @@ def lenQuote(s):
         return len(list(filter(lambda ch: ch == '"', s)))
     except:
         return False
+    
+def readFile(filename):
+    fSurvivors = open(filename)
+    survivorsText  = ""
+    for line in fSurvivors:
+        survivorsText += line
+    return survivorsText.lower()
 
+survivorsText = readFile("../Titanic Survivors.html")     
+deathText = readFile("../Titanic Death Certificates.shtml")     
+
+iRe = re.finditer(">([^>]*) - death certificate</a></li>", deathText)
+deaths = []
+for match in iRe:
+    group = match.group(0)
+    deaths.append(group)
+
+def splitName(s):
+    return s.lower().replace('"', '', 1000).replace('(', ' ', 1000).replace(')', ' ', 1000).replace('master.', ' ', 1000).replace('mr.', ' ', 1000).replace("mrs.", ' ', 1000).replace('miss.', ' ', 1000).replace(",", ' ', 1000).split()
+
+def inList(name):
+    try:
+        parts = splitName(name)
+        for p in parts:
+            # print(p, name)
+            if survivorsText.find(p) < 0:
+                return False
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
+def inListCount(name):
+    try:
+        count = 0
+        parts = splitName(name)
+        for p in parts:
+            if survivorsText.find(p) >= 0:
+                count += 1
+        return count
+    except Exception as e:
+        print(e)
+        return 0
+
+def inDeathList(name):
+    try:
+        parts = splitName(name)
+        for p in parts:
+            if deathText.find(p) < 0:
+                return False
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
+def inDeathListCount(name):
+    try:
+        count = 0
+        parts = splitName(name)
+        for p in parts:
+            if deathText.find(p) >= 0:
+                count += 1
+        return count
+    except Exception as e:
+        print(e)
+        return 0
+
+def inDeathListCountItems(name):
+    try:
+        parts = splitName(name)
+        maxCount = 0
+        for d in deaths:
+            count = 0
+            for p in parts:
+                if d.find(p) >= 0:
+                    count += 1
+            if count > maxCount:
+                maxCount = count
+        return maxCount
+    except Exception as e:
+        print(e)
+        return 0
+
+def inDeathListItems(name):
+    try:
+        parts = splitName(name)
+        for d in deaths:
+            foundAll = True
+            for p in parts:
+                if d.find(p) < 0:
+                    foundAll = False
+                    break
+            if foundAll:
+                return True
+        return False
+    except Exception as e:
+        print(e)
+        return False
+
+def inDeathListItems2(name):
+    try:
+        parts = splitName(name)[0:2]
+        for d in deaths:
+            foundAll = True
+            for p in parts:
+                if d.find(p) < 0:
+                    foundAll = False
+                    break
+            if foundAll:
+                return True
+        return False
+    except Exception as e:
+        print(e)
+        return False
+
+def nameCount(name):
+    try:
+        parts = splitName(name)
+        return len(parts)
+    except Exception as e:
+        print(e)
+        return 0
 
 def prepare(df):
     # I need to convert all strings to integer classifiers.
@@ -135,6 +257,14 @@ def prepare(df):
     df['NameLen'] = df['Name'].apply(len).astype(int)
     df['NameSpLen'] = df['Name'].apply(lenSp).astype(int)
     df['NameQuoteLen'] = df['Name'].apply(lenQuote).astype(int)
+    df['NameInListAll'] = df['Name'].apply(nameCount).astype(int)
+    df['NameInListHits'] = df['Name'].apply(inListCount).astype(int)
+    df['NameInList'] = df['Name'].apply(inList).astype(int)
+    df['NameInListDeathHits'] = df['Name'].apply(inDeathListCount).astype(int)
+    df['NameInListDeath'] = df['Name'].apply(inDeathList).astype(int)
+    df['NameInListDeathHitsItems'] = df['Name'].apply(inDeathListCountItems).astype(int)
+    df['NameInListDeathItem'] = df['Name'].apply(inDeathListItems).astype(int)
+    df['NameInListDeathItem2'] = df['Name'].apply(inDeathListItems2).astype(int)
     
     # Embarked from 'C', 'Q', 'S'
     # Note this is not ideal: in translating categories to numbers, Port "2" is not 2 times greater than Port "1", etc.
@@ -148,7 +278,7 @@ def prepare(df):
     df.Embarked = df.Embarked.map( lambda x: dictPorts[x]).astype(int)     # Convert all Embark strings to int
     
     # All the ages with no data -> make the median of all Ages
-    df['HasAge'] = df.Age.isnull().astype(int)
+    df['HasNoAge'] = df.Age.isnull().astype(int)
     if len(df.Age[ df.Age.isnull() ]) > 0:
         df.loc[ (df.Age.isnull()), 'Age'] = medianAge
     if len(df.Fare[ df.Fare.isnull() ]) > 0:
@@ -176,10 +306,8 @@ global bestScore, bestNIterations, bestC, bestModel
 
 tp = ThreadPoolExecutor(2)
 
-for nIterations in [1, 3, 5, 6, 7, 10, 20, 40, 50, 75, 100, 150, 200, 250, 400, 500, 600, 700, 1000]:
+for nIterations in [1, 3, 5, 6, 7, 10, 20, 40, 50, 75, 100, 150, 200, 250, 400, 500, 600, 700, 1000, 1500, 2000]:
     for c in [RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, xgboost.XGBClassifier]:
-    # for c in [RandomForestClassifier]:
-    # for c in [xgboost.XGBClassifier]:    
         def calc(nIterations, c):
             try:
                 rfE = c(n_estimators=nIterations, learning_rate=0.01, max_depth=3)
