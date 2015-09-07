@@ -9,7 +9,7 @@ import xgboost
 
 def main():
     #create the training & test sets, skipping the header row with [1:]
-    dataset = genfromtxt('../train.csv', delimiter=',', dtype='f8')[1:]    
+    dataset = genfromtxt('../train.csv', delimiter=',', dtype='f8', skip_header=1)[1:]
 
     target = [x[0] for x in dataset]
     train = [x[1:] for x in dataset]
@@ -19,7 +19,9 @@ def main():
 
 #     rf = xgboost.XGBClassifier()
 #     rf.fit(trainFeatures, trainTarget)
-#     score = rf.score(testFeatures, testTarget)
+#     score = rf.score(train, target)
+#     test = genfromtxt('../test.csv', delimiter=',', dtype='f8', skip_header=1)
+#     savetxt('../xgboost.csv', rf.predict_proba(test), delimiter='\t')
 #     print("ok ", score)
     
     tp = ThreadPoolExecutor(2)
@@ -66,11 +68,10 @@ def main():
     with open('bestModel.pickle', 'wb') as f:
         pickle.dump(rf, f)
     
-    test = genfromtxt('../test.csv', delimiter=',', dtype='f8')[1:]
+    test = genfromtxt('../test.csv', delimiter=',', dtype='f8', skip_header=1)
+    savetxt('../test2.csv', test, delimiter='\t')
     predicted_probs = [[index + 1, x[1]] for index, x in enumerate(rf.predict_proba(test))]
     savetxt('../submission.csv', predicted_probs, delimiter=',', fmt='%d,%f', header='MoleculeId,PredictedProbability', comments = '')
-    predicted_probs2 = [[index + 1, x[1]] for index, x in enumerate(rf.predict(test))]
-    savetxt('../submission2.csv', predicted_probs2, delimiter=',', fmt='%d,%f', header='MoleculeId,PredictedProbability', comments = '')
 
 if __name__=="__main__":
     main()
