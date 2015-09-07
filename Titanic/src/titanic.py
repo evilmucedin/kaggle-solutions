@@ -163,15 +163,16 @@ train_df.to_csv("../trainConverted.csv")
 
 # The data is now ready to go. So lets fit to the train, then predict to the test!
 # Convert back to a numpy array
-train_data = train_df.values
+trainData = train_df.values
 
-trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(train_data[0::, 1::], train_data[0::, 0], test_size=0.2)
+trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(trainData[0::, 1::], trainData[0::, 0], test_size=0.2)
 
 bestNIterations = 1
 bestScore = 0
 bestC = None
+bestModel = None
 
-global bestScore, bestNIterations, bestC
+global bestScore, bestNIterations, bestC, bestModel
 
 tp = ThreadPoolExecutor(2)
 
@@ -181,20 +182,21 @@ for nIterations in [1, 3, 5, 6, 7, 10, 20, 40, 50, 75, 100, 150, 200, 250, 400, 
     # for c in [xgboost.XGBClassifier]:    
         def calc(nIterations, c):
             try:
-                rfE = c(n_estimators=nIterations, n_jobs=2)
+                rfE = c(n_estimators=nIterations, learning_rate=0.01, max_depth=3)
             except:
                 rfE = c(n_estimators=nIterations)
             before = process_time()
             rfE.fit(trainFeatures, trainTarget)
             after = process_time()
             score = rfE.score(testFeatures, testTarget)
-            rfE = None
             print(c, nIterations, score, after - before)
-            global bestScore, bestNIterations, bestC
+            global bestScore, bestNIterations, bestC, bestModel
             if score > bestScore:
                 bestScore = score
                 bestNIterations = nIterations
                 bestC = c
+                bestModel = rfE
+            rfE = None
                 
         tp.submit(calc, nIterations, c)  
             
@@ -203,7 +205,7 @@ print("best", bestC, bestNIterations, bestScore)
 
 print('Training...')
 forest = bestC(n_estimators=bestNIterations)
-forest = forest.fit(train_data[0::, 1::], train_data[0::, 0])
+forest = forest.fit(trainData[0::, 1::], trainData[0::, 0])
 
 print('Predicting...')
 # TEST DATA
@@ -213,12 +215,12 @@ ids = test_df['PassengerId'].values
 test_df = prepare(test_df)
 test_df.to_csv("../testConverted.csv")
 
-test_data = test_df.values
-fOut = open("../debug", "w")
-for x in test_data:
-    for y in x:
-        print(y, file=fOut)
-fOut.close()
+testData = test_df.values
+# fOut = open("../debug", "w")
+# for x in testData:
+#     for y in x:
+#         print(y, file=fOut)
+# fOut.close()
 
 def _assert_all_finite(X):
     """Like assert_all_finite, but only for ndarray."""
@@ -235,9 +237,20 @@ def _assert_all_finite(X):
         raise ValueError("Input contains NaN, infinity"
                          " or a value too large for %r. %f" % (X.dtype, X.sum()))
 
-_assert_all_finite(test_data)
+_assert_all_finite(testData)
 
-output = [[ids[index], 1 if (x[1] > 0.5) else 0] for index, x in enumerate(forest.predict_proba(test_data))]
+trainProba = bestModel.predict_proba(testFeatures)
+values = []
+for i, data in enumerate(testTarget):
+    if 1.0 == data:
+        values.append(trainProba[i][1])
+values = sorted(values)
+medianValue = values[len(values)//2]
+print("medianValue", medianValue)
+
+testProba = forest.predict_proba(testData)
+np.savetxt('../testProba.csv', testProba, delimiter='\t')
+output = [[ids[index], 1 if (x[1] > medianValue - 0.01) else 0] for index, x in enumerate(testProba)]
 predictions_file = open("../myfirstforest.csv", "w")
 open_file_object = csv.writer(predictions_file)
 open_file_object.writerow(["PassengerId", "Survived"])
