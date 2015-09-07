@@ -2,10 +2,15 @@
 import pickle
 from time import process_time
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.cross_validation import train_test_split
 from numpy import genfromtxt, savetxt
 from concurrent.futures import ThreadPoolExecutor 
 import xgboost
+
+bestNIterations = 1
+bestScore = 0
+bestC = None
 
 def main():
     #create the training & test sets, skipping the header row with [1:]
@@ -27,9 +32,6 @@ def main():
     tp = ThreadPoolExecutor(2)
 
     global bestScore, bestNIterations, bestC
-    bestNIterations = 1
-    bestScore = 0
-    bestC = None
     for nIterations in [1, 5, 10, 50, 100, 150, 200, 250, 400, 500, 700, 1000]:
         for c in [RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, xgboost.XGBClassifier]:
         # for c in [RandomForestClassifier]:
@@ -45,8 +47,8 @@ def main():
                 score = rfE.score(testFeatures, testTarget)
                 rfE = None
                 print(c, nIterations, score, after - before)
+                global bestScore, bestNIterations, bestC
                 if score > bestScore:
-                    global bestScore, bestNIterations, bestC
                     bestScore = score
                     bestNIterations = nIterations
                     bestC = c
