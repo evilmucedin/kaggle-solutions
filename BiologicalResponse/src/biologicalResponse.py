@@ -2,7 +2,6 @@
 import pickle
 from time import process_time
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.cross_validation import train_test_split
 from numpy import genfromtxt, savetxt
 from concurrent.futures import ThreadPoolExecutor 
