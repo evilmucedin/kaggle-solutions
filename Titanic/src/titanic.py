@@ -12,9 +12,10 @@ from numpy.f2py.auxfuncs import isinteger
 
 # Data cleanup
 # TRAIN DATA
-train_df = pd.read_csv('../train.csv', header=0)        # Load the train file into a dataframe
-medianAge = train_df['Age'].dropna().median()
-medianFare = train_df['Fare'].dropna().median()
+dfRawTrain = pd.read_csv('../train.csv', header=0)        # Load the train file into a dataframe
+medianAge = dfRawTrain['Age'].dropna().median()
+medianFare = dfRawTrain['Fare'].dropna().median()
+dfTrain = dfRawTrain.copy()
 
 def isinteger(s):
     try:
@@ -118,7 +119,8 @@ def readFile(filename):
         survivorsText += line
     return survivorsText.lower()
 
-survivorsText = readFile("../Titanic Survivors.html")     
+survivorsText = readFile("../Titanic Survivors.html")
+victimsText = readFile("../Victims of the Titanic Disaster.html")     
 deathText = readFile("../Titanic Death Certificates.shtml")     
 
 iRe = re.finditer(">([^>]*) - death certificate</a></li>", deathText)
@@ -142,12 +144,60 @@ def inList(name):
         print(e)
         return False
 
+def inList2(name):
+    try:
+        parts = splitName(name)[0:2]
+        for p in parts:
+            # print(p, name)
+            if survivorsText.find(p) < 0:
+                return False
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
 def inListCount(name):
     try:
         count = 0
         parts = splitName(name)
         for p in parts:
             if survivorsText.find(p) >= 0:
+                count += 1
+        return count
+    except Exception as e:
+        print(e)
+        return 0
+
+def inVictimsList(name):
+    try:
+        parts = splitName(name)
+        for p in parts:
+            # print(p, name)
+            if victimsText.find(p) < 0:
+                return False
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
+def inVictimsList2(name):
+    try:
+        parts = splitName(name)[0:2]
+        for p in parts:
+            # print(p, name)
+            if victimsText.find(p) < 0:
+                return False
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
+def inVictimsListCount(name):
+    try:
+        count = 0
+        parts = splitName(name)
+        for p in parts:
+            if victimsText.find(p) >= 0:
                 count += 1
         return count
     except Exception as e:
@@ -260,6 +310,10 @@ def prepare(df):
     df['NameInListAll'] = df['Name'].apply(nameCount).astype(int)
     df['NameInListHits'] = df['Name'].apply(inListCount).astype(int)
     df['NameInList'] = df['Name'].apply(inList).astype(int)
+    df['NameInList2'] = df['Name'].apply(inList2).astype(int)
+    df['NameInVictimsListHits'] = df['Name'].apply(inVictimsListCount).astype(int)
+    df['NameInVictimsList'] = df['Name'].apply(inVictimsList).astype(int)
+    df['NameInVictimsList2'] = df['Name'].apply(inVictimsList2).astype(int)
     df['NameInListDeathHits'] = df['Name'].apply(inDeathListCount).astype(int)
     df['NameInListDeath'] = df['Name'].apply(inDeathList).astype(int)
     df['NameInListDeathHitsItems'] = df['Name'].apply(inDeathListCountItems).astype(int)
@@ -288,14 +342,16 @@ def prepare(df):
     return df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'PassengerId'], axis=1) 
 
 
-train_df = prepare(train_df)
-train_df.to_csv("../trainConverted.csv")
+dfTrain = prepare(dfTrain)
+dfTrain.to_csv("../trainConverted.csv")
 
 # The data is now ready to go. So lets fit to the train, then predict to the test!
 # Convert back to a numpy array
-trainData = train_df.values
+trainData = dfTrain.values
 
-trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(trainData[0::, 1::], trainData[0::, 0], test_size=0.2)
+allTrainFeatures = trainData[0::, 1::]
+allTrainTarget = trainData[0::, 0]
+trainFeatures, testFeatures, trainTarget, testTarget = train_test_split(allTrainFeatures, allTrainTarget, test_size=0.2)
 
 bestNIterations = 1
 bestScore = 0
@@ -306,13 +362,17 @@ global bestScore, bestNIterations, bestC, bestModel
 
 tp = ThreadPoolExecutor(2)
 
+def createModel(cl, nIt):
+    try:
+        rfE = c(n_estimators=nIterations, learning_rate=0.01, max_depth=3)
+    except:
+        rfE = c(n_estimators=nIterations)
+    return rfE
+
 for nIterations in [1, 3, 5, 6, 7, 10, 20, 40, 50, 75, 100, 150, 200, 250, 400, 500, 600, 700, 1000, 1500, 2000]:
     for c in [RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, xgboost.XGBClassifier]:
         def calc(nIterations, c):
-            try:
-                rfE = c(n_estimators=nIterations, learning_rate=0.01, max_depth=3)
-            except:
-                rfE = c(n_estimators=nIterations)
+            rfE = createModel(c, nIterations)
             before = process_time()
             rfE.fit(trainFeatures, trainTarget)
             after = process_time()
@@ -332,25 +392,30 @@ tp.shutdown()
 print("best", bestC, bestNIterations, bestScore)
 
 print('Training...')
-forest = bestC(n_estimators=bestNIterations)
-forest = forest.fit(trainData[0::, 1::], trainData[0::, 0])
+forest = createModel(bestC, bestNIterations)
+forest = forest.fit(allTrainFeatures, allTrainTarget)
+
+allTrainPredicted = forest.predict_proba(allTrainFeatures)
+for i in range(len(allTrainPredicted)):
+    if abs(allTrainPredicted[i][1] - allTrainTarget[i]) > 0.2:
+        print(dfTrain.iloc[i], dfRawTrain.iloc[i], "predictred=", allTrainPredicted[i][1], "fact=", allTrainTarget[i])
 
 print('Predicting...')
 # TEST DATA
-test_df = pd.read_csv('../test.csv', header=0)        # Load the test file into a dataframe
-ids = test_df['PassengerId'].values
+dfTest = pd.read_csv('../test.csv', header=0)        # Load the test file into a dataframe
+ids = dfTest['PassengerId'].values
 
-test_df = prepare(test_df)
-test_df.to_csv("../testConverted.csv")
+dfTest = prepare(dfTest)
+dfTest.to_csv("../testConverted.csv")
 
-testData = test_df.values
+testData = dfTest.values
 # fOut = open("../debug", "w")
 # for x in testData:
 #     for y in x:
 #         print(y, file=fOut)
 # fOut.close()
 
-def _assert_all_finite(X):
+def assertAllFinite(X):
     """Like assert_all_finite, but only for ndarray."""
     X = np.asanyarray(X)
     # First try an O(n) time, O(1) space solution for the common case that
@@ -365,7 +430,7 @@ def _assert_all_finite(X):
         raise ValueError("Input contains NaN, infinity"
                          " or a value too large for %r. %f" % (X.dtype, X.sum()))
 
-_assert_all_finite(testData)
+assertAllFinite(testData)
 
 trainProba = bestModel.predict_proba(testFeatures)
 values = []
@@ -379,9 +444,9 @@ print("medianValue", medianValue)
 testProba = forest.predict_proba(testData)
 np.savetxt('../testProba.csv', testProba, delimiter='\t')
 output = [[ids[index], 1 if (x[1] > medianValue - 0.01) else 0] for index, x in enumerate(testProba)]
-predictions_file = open("../myfirstforest.csv", "w")
-open_file_object = csv.writer(predictions_file)
-open_file_object.writerow(["PassengerId", "Survived"])
-open_file_object.writerows(output)
-predictions_file.close()
+fPredictions = open("../myfirstforest.csv", "w")
+csvPredictions = csv.writer(fPredictions)
+csvPredictions.writerow(["PassengerId", "Survived"])
+csvPredictions.writerows(output)
+fPredictions.close()
 print('Done.')
