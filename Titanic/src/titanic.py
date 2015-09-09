@@ -156,6 +156,30 @@ def inList2(name):
         print(e)
         return False
 
+def inList8(name):
+    try:
+        parts = splitName(name)
+        for p in parts:
+            for i in range(8, len(p)):
+                if survivorsText.find(p[i - 8:i]) >= 0:
+                    return True
+        return False
+    except Exception as e:
+        print(e)
+        return False
+
+def inVictimsList8(name):
+    try:
+        parts = splitName(name)
+        for p in parts:
+            for i in range(8, len(p)):
+                if victimsText.find(p[i - 8:i]) >= 0:
+                    return True
+        return False
+    except Exception as e:
+        print(e)
+        return False
+
 def inListCount(name):
     try:
         count = 0
@@ -310,6 +334,8 @@ def prepare(df):
     df['NameInListAll'] = df['Name'].apply(nameCount).astype(int)
     df['NameInListHits'] = df['Name'].apply(inListCount).astype(int)
     df['NameInList'] = df['Name'].apply(inList).astype(int)
+    df['Name8InList'] = df['Name'].apply(inList8).astype(int)
+    df['Name8InVictimsList'] = df['Name'].apply(inVictimsList8).astype(int)
     df['NameInList2'] = df['Name'].apply(inList2).astype(int)
     df['NameInVictimsListHits'] = df['Name'].apply(inVictimsListCount).astype(int)
     df['NameInVictimsList'] = df['Name'].apply(inVictimsList).astype(int)
