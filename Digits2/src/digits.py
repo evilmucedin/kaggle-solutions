@@ -14,7 +14,7 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 100
+numUnits = 120
 
 def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
