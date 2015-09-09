@@ -14,9 +14,9 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 800
+numUnits = 20
 
-def build_mlp(input_var=None):
+def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
     # a softmax output layer of 10 units. It applies 20% dropout to the input
     # data and 50% dropout to the hidden layers.
@@ -24,7 +24,7 @@ def build_mlp(input_var=None):
     # Input layer, specifying the expected input shape of the network
     # (unspecified batchsize, 1 channel, 28 rows and 28 columns) and
     # linking it to the given Theano variable `input_var`, if any:
-    l_in = lasagne.layers.InputLayer(shape=(None, 784), input_var=input_var)
+    l_in = lasagne.layers.InputLayer(shape=(None, 784), input_var=vInput)
 
     # Apply 20% dropout to the input data:
     l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.2)
@@ -89,8 +89,14 @@ def loadDataset():
     featuresTrain = data[:, 1:]
     data = None
 
+    amean = np.mean(featuresTrain)
+    featuresTrain = featuresTrain - amean
+    astd = np.std(featuresTrain)
+    featuresTrain = featuresTrain / astd
+
     featuresTest = np.loadtxt("../test.csv", dtype=dtype, delimiter=',', skiprows=1)
     print("TestData: ", featuresTest.shape)
+    featuresTest = (featuresTest - amean) / astd
     
     return labelsTrain, featuresTrain, featuresTest
 
