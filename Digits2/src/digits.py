@@ -14,7 +14,7 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 80
+numUnits = 800
 
 def build_mlp(input_var=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
@@ -123,10 +123,22 @@ def main():
 
     val_fn = theano.function([input_var, target_var], [test_loss, test_acc])
 
+    predict_fn = theano.function([input_var], T.argmax(test_prediction, axis=1))
+    
+    def save():
+        preds = []
+        for batch in iterate_minibatches2(featuresTest, batchSize, shuffle=False):
+            preds.extend(predict_fn(batch))
+        
+        subm = np.empty((len(featuresTest), 2))
+        subm[:, 0] = np.arange(1, len(featuresTest) + 1)
+        subm[:, 1] = preds
+        np.savetxt('../submission.csv', subm, fmt='%d', delimiter=',', header='ImageId,Label', comments='')
+
     # Finally, launch the training loop.
     print("Starting training...")
-    num_epochs = 1
-    batchSize = 10
+    num_epochs = 10
+    batchSize = 50
     for epoch in range(num_epochs):
         # In each epoch, we do a full pass over the training data:
         train_err = 0
@@ -153,18 +165,11 @@ def main():
         print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
         print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
         print("  validation accuracy:\t\t{:.2f} %".format(val_acc / val_batches * 100))
+        save()
+    
     print("Training done...")
 
-    predict_fn = theano.function([input_var], T.argmax(test_prediction, axis=1))
-    
-    preds = []
-    for batch in iterate_minibatches2(featuresTest, batchSize, shuffle=False):
-        preds.extend(predict_fn(batch))
-    
-    subm = np.empty((len(featuresTest), 2))
-    subm[:, 0] = np.arange(1, len(featuresTest) + 1)
-    subm[:, 1] = preds
-    np.savetxt('../submission.csv', subm, fmt='%d', delimiter=',', header='ImageId,Label', comments='')
+    save()
     
 if __name__ == '__main__':
     main()
