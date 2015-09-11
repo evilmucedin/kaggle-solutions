@@ -22,11 +22,11 @@ struct TCSVReader
         if (m_fileReader.ReadLine(&line))
         {
             TStringVector tokens;
-            while (m_fileReader.ReadLine(&line) && (m_rows.size() < limit))
+			const TUi8Data dummy(tokens.size());
+			while (m_fileReader.ReadLine(&line) && (m_rows.size() < limit))
             {
                 Split(line, ',', &tokens);
-                m_rows.push_back( TUi8Data() );
-                m_rows.back().resize(tokens.size());
+                m_rows.push_back(dummy);
                 for (size_t i = 0; i < tokens.size(); ++i)
                 {
                     m_rows.back()[i] = FromString<ui8>(tokens[i]);

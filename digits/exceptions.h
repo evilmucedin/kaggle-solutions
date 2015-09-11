@@ -2,6 +2,8 @@
 
 #include <exception>
 
+#include "types.h"
+
 struct TException : public std::exception
 {
     std::string m_message;

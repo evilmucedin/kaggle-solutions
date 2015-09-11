@@ -20,6 +20,10 @@ ADD_EXECUTABLE(
     digits
     digits.cpp
     fileIO.cpp
+    system.cpp
+    str.cpp
+    neural.cpp
+    picture.cpp
 )
 
 TARGET_LINK_LIBRARIES(

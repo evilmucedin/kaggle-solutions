@@ -1,11 +1,4 @@
-#pragma once
-
-#include <string>
-#include <vector>
-
-#include "types.h"
-
-typedef std::vector<std::string> TStringVector;
+#include "str.h"
 
 void Split(const std::string& line, char sep, TStringVector* result)
 {
@@ -35,26 +28,9 @@ void Split(const std::string& line, char sep, TStringVector* result)
     }
 }
 
-TEST(Split, Basics)
-{
-    TStringVector sv;
-    Split("a,b,c", ',', &sv);
-    EXPECT_EQ(sv.size(), 3);
-    EXPECT_EQ(sv[0], "a");
-    EXPECT_EQ(sv[1], "b");
-    EXPECT_EQ(sv[2], "c");
-    EXPECT_EQ(sv[2].length(), 1);
-}
-
 bool IsDigit(char ch)
 {
     return (ch >= '0') && (ch <= '9');
-}
-
-template<typename T>
-T FromString(const std::string& s)
-{
-    T::Unimplemented;
 }
 
 template<>
@@ -136,4 +112,3 @@ float FromString<float>(const std::string& s)
         throw TException("could not cast to float '" + s + "'");
     }
 }
-

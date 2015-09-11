@@ -5,6 +5,7 @@
 #include <string>
 
 #include "exceptions.h"
+#include "str.h"
 
 struct TFileReader
 {
@@ -40,7 +41,7 @@ struct TFileReader
 
     bool Eof()
     {
-        return feof(m_file);
+        return 0 != feof(m_file);
     }
 
     char ReadChar()
@@ -91,3 +92,66 @@ struct TFileWriter
 };
 
 void MkDir(const std::string& name);
+
+struct TTokenReader
+{
+    TFileReader m_reader;
+
+    TTokenReader(const std::string& filename)
+        : m_reader(filename)
+    {
+    }
+
+    static bool IsDelim(char ch)
+    {
+        return ('\t' == ch) || ('\r' == ch) || ('\n' == ch);
+    }
+
+    template<typename T>
+    T NextToken()
+    {
+        T::Unimplemented();
+    }
+
+    std::string NextToken()
+    {
+        char now = m_reader.ReadChar();
+        while (!m_reader.Eof() && IsDelim(now))
+        {
+            now = m_reader.ReadChar();
+        }
+        std::string result;
+        if (!IsDelim(now))
+        {
+            result += now;
+            while (!m_reader.Eof())
+            {
+                now = m_reader.ReadChar();
+                if (!IsDelim(now))
+                {
+                    result += now;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    ui32 NextTokenUi32()
+    {
+        return FromString<ui32>(NextToken());
+    }
+
+    float NextTokenFloat()
+    {
+        return FromString<float>(NextToken());
+    }
+
+    bool Eof()
+    {
+        return m_reader.Eof();
+    }
+};
