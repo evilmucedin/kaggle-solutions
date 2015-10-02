@@ -660,7 +660,9 @@ int main(int argc, char* argv[])
                 {
                     TTimer timerApply("Apply " + std::to_string(iLearnIt));
                     TCSVWriter writer("neural.csv");
-                    writer.Put("ImageId,Label\n");
+                    writer.Put("ImageId");
+                    writer.Put("Label");
+                    writer.NewLine();
                     IProbEstimators pEstimators(10);
                     for (size_t i = 0; i < 10; ++i)
                     {
@@ -678,7 +680,8 @@ int main(int argc, char* argv[])
 
                         const TPicture& p = pTest[i];
                         TBest best = Choose(pEstimators, p, testName, i);
-                        writer.Put( std::to_string(i + 1) + "," + std::to_string(best.first) );
+                        writer.Put( std::to_string(i + 1) );
+                        writer.Put( std::to_string(best.first) );
                         writer.NewLine();
                         if (verbose)
                         {

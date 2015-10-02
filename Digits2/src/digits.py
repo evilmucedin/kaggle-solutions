@@ -14,7 +14,7 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 120
+numUnits = 2000
 
 def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
@@ -114,15 +114,18 @@ def main():
     network = build_mlp(input_var)
 
     prediction = lasagne.layers.get_output(network)
-    loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
-    loss = loss.mean()
-
-    params = lasagne.layers.get_all_params(network, trainable=True)
-    trainUpdates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
-
-    train_fn = theano.function([input_var, target_var], loss, updates=trainUpdates)
+    pureloss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
+    pureloss = pureloss.mean()
 
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
+    loss = pureloss + 0.0003*lasagne.regularization.l2(test_prediction)
+
+    params = lasagne.layers.get_all_params(network, trainable=True)
+    trainUpdates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.002, momentum=0.9)
+
+    train_fn = theano.function([input_var, target_var], loss, updates=trainUpdates)
+    pureTrain_fn = theano.function([input_var, target_var], pureloss)
+
     test_loss = lasagne.objectives.categorical_crossentropy(test_prediction, target_var)
     test_loss = test_loss.mean()
     test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var), dtype=theano.config.floatX)
@@ -143,16 +146,18 @@ def main():
 
     # Finally, launch the training loop.
     print("Starting training...")
-    num_epochs = 100
-    batchSize = 50
+    num_epochs = 1000
+    batchSize = 100
     for epoch in range(num_epochs):
         # In each epoch, we do a full pass over the training data:
         train_err = 0
+        train_pureErr = 0
         train_batches = 0
         start_time = time.time()
         for batch in iterate_minibatches(featuresTrain, labelsTrain, batchSize, shuffle=True):
             inputs, targets = batch
             train_err += train_fn(inputs, targets)
+            train_pureErr += pureTrain_fn(inputs, targets)
             train_batches += 1
 
         # And a full pass over the validation data:
@@ -169,6 +174,7 @@ def main():
         # Then we print the results for this epoch:
         print("Epoch {} of {} took {:.3f}s".format(epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
+        print("  pure training loss:\t\t{:.6f}".format(train_pureErr / train_batches))
         print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
         print("  validation accuracy:\t\t{:.2f} %".format(val_acc / val_batches * 100))
         save()
