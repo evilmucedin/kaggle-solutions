@@ -14,7 +14,7 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 2000
+numUnits = 5000
 
 def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
@@ -82,7 +82,7 @@ def iterate_minibatches2(inputs, batchsize, shuffle=False):
 
 def loadDataset():
     dtype = np.float32
-    data = np.loadtxt("../train.csv", dtype=dtype, delimiter=',', skiprows=1)
+    data = np.loadtxt("../trainAll.csv", dtype=dtype, delimiter=',', skiprows=1)
     print("Data: ", data.shape)
 
     labelsTrain = data[:,0].astype(np.int32)
@@ -118,7 +118,7 @@ def main():
     pureloss = pureloss.mean()
 
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    loss = pureloss + 0.0003*lasagne.regularization.l2(test_prediction)
+    loss = pureloss + 0.0001*lasagne.regularization.l2(test_prediction)
 
     params = lasagne.layers.get_all_params(network, trainable=True)
     trainUpdates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.002, momentum=0.9)
@@ -147,7 +147,7 @@ def main():
     # Finally, launch the training loop.
     print("Starting training...")
     num_epochs = 1000
-    batchSize = 100
+    batchSize = 200
     for epoch in range(num_epochs):
         # In each epoch, we do a full pass over the training data:
         train_err = 0
