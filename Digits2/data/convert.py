@@ -83,6 +83,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", default=None, type=int,
                         help="ID (position) of the letter to show")
+    parser.add_argument("--binary", default=False,
+                        help="produce binary features")
     parser.add_argument("--data", default="./data",
                         help="Path to MNIST data dir")
 
@@ -102,13 +104,17 @@ if __name__ == "__main__":
         for img, label in zip(imgs, labels):
             print(label, file=fOut, end="")
             for j in range(n*n):
-                print(",%d" % img[j], file=fOut, end="")
+                if args.binary:
+                    feature = 1 if img[j] != 0 else 0
+                else:
+                    feature = img[j]
+                print(",%d" % feature, file=fOut, end="")
             print("", file=fOut)
     
     img, label = mn.load_training()
     out(img, label)
-    img, label = mn.load_testing()
-    out(img, label)
+    # img, label = mn.load_testing()
+    # out(img, label)
 
     if args.id:
         which = args.id
