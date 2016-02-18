@@ -84,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--id", default=None, type=int,
                         help="ID (position) of the letter to show")
     parser.add_argument("--binary", default=False,
-                        help="produce binary features")
+                        help="produce binary features", action='store_true')
     parser.add_argument("--data", default="./data",
                         help="Path to MNIST data dir")
 
@@ -113,8 +113,9 @@ if __name__ == "__main__":
     
     img, label = mn.load_training()
     out(img, label)
-    # img, label = mn.load_testing()
-    # out(img, label)
+    fOut = open("testing.csv", "w")
+    img, label = mn.load_testing()
+    out(img, label)
 
     if args.id:
         which = args.id
