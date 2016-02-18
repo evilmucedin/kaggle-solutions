@@ -113,7 +113,7 @@ if __name__ == "__main__":
     
     img, label = mn.load_training()
     out(img, label)
-    fOut = open("testing.csv", "w")
+    fOut = open("test.csv", "w")
     img, label = mn.load_testing()
     out(img, label)
 
