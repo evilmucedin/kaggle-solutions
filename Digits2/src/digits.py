@@ -14,7 +14,7 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 5000
+numUnits = 2000
 
 def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
@@ -97,6 +97,7 @@ def loadDataset():
     featuresTest = np.loadtxt("../test.csv", dtype=dtype, delimiter=',', skiprows=1)
     print("TestData: ", featuresTest.shape)
     featuresTest = (featuresTest - amean) / astd
+    featuresTest = featuresTest[:, 1:]
     
     return labelsTrain, featuresTrain, featuresTest
 

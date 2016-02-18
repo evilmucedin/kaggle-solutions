@@ -95,12 +95,17 @@ if __name__ == "__main__":
     n = 28
     print("out")
     fOut = open("trainAll.csv", "w")
+    fTest = open("test.csv", "w")
     print("label", file=fOut, end="")
     for i in range(n*n):
         print(",pixel%d" % i, file=fOut, end="")
     print("", file=fOut)
+    print("label", file=fTest, end="")
+    for i in range(n*n):
+        print(",pixel%d" % i, file=fTest, end="")
+    print("", file=fTest)
     
-    def out(imgs, labels):
+    def out(imgs, labels, fOut):
         for img, label in zip(imgs, labels):
             print(label, file=fOut, end="")
             for j in range(n*n):
@@ -112,10 +117,9 @@ if __name__ == "__main__":
             print("", file=fOut)
     
     img, label = mn.load_training()
-    out(img, label)
-    fOut = open("test.csv", "w")
+    out(img, label, fOut)
     img, label = mn.load_testing()
-    out(img, label)
+    out(img, label, fTest)
 
     if args.id:
         which = args.id
