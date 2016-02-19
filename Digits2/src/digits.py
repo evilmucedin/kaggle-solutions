@@ -96,8 +96,8 @@ def loadDataset():
 
     featuresTest = np.loadtxt("../test.csv", dtype=dtype, delimiter=',', skiprows=1)
     print("TestData: ", featuresTest.shape)
-    featuresTest = (featuresTest - amean) / astd
     labelsTest = featuresTest[:,0].astype(np.int32)
+    featuresTest = (featuresTest - amean) / astd
     featuresTest = featuresTest[:, 1:]
     
     return labelsTrain, featuresTrain, labelsTest, featuresTest
@@ -173,7 +173,7 @@ def main():
             val_acc += acc
             val_batches += 1
 
-        # And a full pass over the validation data:
+        # And a full pass over the test data:
         test_err = 0
         test_acc = 0
         test_batches = 0
