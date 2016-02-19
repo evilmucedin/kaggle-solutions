@@ -97,14 +97,15 @@ def loadDataset():
     featuresTest = np.loadtxt("../test.csv", dtype=dtype, delimiter=',', skiprows=1)
     print("TestData: ", featuresTest.shape)
     featuresTest = (featuresTest - amean) / astd
+    labelsTest = featuresTest[:,0].astype(np.int32)
     featuresTest = featuresTest[:, 1:]
     
-    return labelsTrain, featuresTrain, featuresTest
+    return labelsTrain, featuresTrain, labelsTest, featuresTest
 
 
 def main():
     print("Loading data...")
-    labelsTrain, featuresTrain, featuresTest = loadDataset()
+    labelsTrain, featuresTrain, labelsTest, featuresTest = loadDataset()
 
     # Prepare Theano variables for inputs and targets
     input_var = T.matrix('inputs')
@@ -172,12 +173,25 @@ def main():
             val_acc += acc
             val_batches += 1
 
+        # And a full pass over the validation data:
+        test_err = 0
+        test_acc = 0
+        test_batches = 0
+        for batch in iterate_minibatches(featuresTest, labelsTest, batchSize, shuffle=False):
+            inputs, targets = batch
+            err, acc = val_fn(inputs, targets)
+            test_err += err
+            test_acc += acc
+            test_batches += 1
+
         # Then we print the results for this epoch:
         print("Epoch {} of {} took {:.3f}s".format(epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
         print("  pure training loss:\t\t{:.6f}".format(train_pureErr / train_batches))
         print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
         print("  validation accuracy:\t\t{:.2f} %".format(val_acc / val_batches * 100))
+        print("  test loss:\t\t{:.6f}".format(test_err / test_batches))
+        print("  test accuracy:\t\t{:.2f} %".format(test_acc / test_batches * 100))
         save()
     
     print("Training done...")
