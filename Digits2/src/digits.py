@@ -14,7 +14,8 @@ import lasagne
 # function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model build in Lasagne.
 
-numUnits = 2000
+numUnits = 5000
+dropout = False
 
 def build_mlp(vInput=None):
     # This creates an MLP of two hidden layers of 800 units each, followed by
@@ -41,7 +42,7 @@ def build_mlp(vInput=None):
 
     # Another 800-unit layer:
     l_hid2 = lasagne.layers.DenseLayer(
-            l_hid1_drop, num_units=numUnits,
+            l_hid1_drop if dropout else l_hid1, num_units=numUnits,
             nonlinearity=lasagne.nonlinearities.rectify)
 
     # 50% dropout again:
@@ -49,7 +50,7 @@ def build_mlp(vInput=None):
 
     # Finally, we'll add the fully-connected output layer, of 10 softmax units:
     l_out = lasagne.layers.DenseLayer(
-            l_hid2_drop, num_units=10,
+            l_hid2_drop if dropout else l_hid2, num_units=10,
             nonlinearity=lasagne.nonlinearities.softmax)
 
     # Each layer is linked to its incoming layer(s), so we only need to pass
