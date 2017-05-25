@@ -1,0 +1,4 @@
+sample_submission.csv filter=lfs diff=lfs merge=lfs -text
+train_2016.csv filter=lfs diff=lfs merge=lfs -text
+zillow_data_dictionary.xlsx filter=lfs diff=lfs merge=lfs -text
+properties_2016.csv filter=lfs diff=lfs merge=lfs -text
