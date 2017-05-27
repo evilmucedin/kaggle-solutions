@@ -17,7 +17,7 @@ import theano.tensor as T
 
 import lasagne
 
-cTest = True
+cTest = False
 if cTest:
     xgboostLr = 0.1
     num_epochs = 1000
@@ -26,8 +26,8 @@ if cTest:
 else:
     xgboostLr = 0.001
     num_epochs = 2000
-    numUnits1 = 500
-    numUnits2 = 50
+    numUnits1 = 200
+    numUnits2 = 30
 
 def readOrPickle(filename):
     pklFilename = filename + ".pkl"
@@ -129,8 +129,8 @@ for x in train_columns:
         valid_train_colums.append(x)
 
 def prepareTrain(x_train):
-	for c in x_train.dtypes[x_train.dtypes == object].index.values:
-		x_train[c] = (x_train[c] == True)
+    for c in x_train.dtypes[x_train.dtypes == object].index.values:
+        x_train[c] = (x_train[c] == True)
 
 prepareTrain(x_train)
 prepareTrain(x_trainS)
@@ -334,7 +334,7 @@ for i in range(101):
     print(lmbd, mae)
 print("opt", bestLambda, minMae)
 
-del d_trainS, d_validS
+del d_trainS, d_validS, y_validSF, gdbPredictions, x_validS
 gc.collect()
 
 d_train = lgb.Dataset(x_train, label=y_train)
