@@ -379,10 +379,10 @@ outFilename = 'xgb_starter.csv'
 
 print('Writing csv ...')
 sub.to_csv(outFilename, index=False, float_format='%.4f')
-call(["gzip", outFilename])
+call(["gzip", "-q", outFilename])
 
 outFilenameNN = 'xgb_starterNN.csv'
 
 print('Writing csv nn ...')
 subNN.to_csv(outFilenameNN, index=False, float_format='%.4f')
-call(["gzip", outFilenameNN])
+call(["gzip", "-q", outFilenameNN])
