@@ -270,14 +270,20 @@ b = min(y_trainS)
 
 print("Validation", x_validS.shape, b)
 
-x_validSF = ((castF(x_validS.values) - normMin)/(normMax - normMin)) - 0.5
+def transformFeatures(df):
+    return ((castF(df) - normMin)/(normMax - normMin)) - 0.5
+
+x_validSF = transformFeatures(x_validS)
 y_validSF = castF(y_validS).reshape(len(y_validS), 1)
 
-predict_fn = train_nn(((x_trainSF - normMin)/(normMax - normMin)) - 0.5, castF(y_trainS).reshape(len(y_trainS), 1) - b, x_validSF, y_validSF - b)
+predict_fn = train_nn(transformFeatures(x_trainSF), castF(y_trainS).reshape(len(y_trainS), 1) - b, x_validSF, y_validSF - b)
 nnPrediction = predict_fn(x_validSF) + b
 print(nnPrediction, y_validSF)
 
-del x_trainSF, normMin, normMax
+print("Full prediction")
+nnPredictionFull = predict_fn(transformFeatures(castF(x_train.values))) + b
+
+del x_trainSF, normMin, normMax, x_validSF, predict_fn
 gc.collect()
 
 print('Building DMatrix...')
@@ -346,6 +352,7 @@ for c in df_test.dtypes[df_test.dtypes == object].index.values:
     df_test[c] = (df_test[c] == True)
 
 sub = readOrPickle('%s/sample_submission.csv' % folder)
+subNN = readOrPickle('%s/sample_submission.csv' % folder)
 for index, date in enumerate(['20161001', '20161101', '20161201', '20171001', '20171101', '20171201']):
     print('Predicting on test %s...' % date)
 
@@ -360,6 +367,7 @@ for index, date in enumerate(['20161001', '20161101', '20161201', '20171001', '2
     gc.collect()
 
     sub[sub.columns[index + 1]] = p_test
+    subNN[subNN.columns[index + 1]] = bestLambda*nnPredictionFull + (1.0 - bestLambda)*p_test
 
     del p_test
     gc.collect()
@@ -372,3 +380,9 @@ outFilename = 'xgb_starter.csv'
 print('Writing csv ...')
 sub.to_csv(outFilename, index=False, float_format='%.4f')
 call(["gzip", outFilename])
+
+outFilenameNN = 'xgb_starterNN.csv'
+
+print('Writing csv nn ...')
+subNN.to_csv(outFilenameNN, index=False, float_format='%.4f')
+call(["gzip", outFilenameNN])
