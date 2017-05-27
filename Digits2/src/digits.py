@@ -159,6 +159,8 @@ def main():
         start_time = time.time()
         for batch in iterate_minibatches(featuresTrain, labelsTrain, batchSize, shuffle=True):
             inputs, targets = batch
+            print(inputs.shape)
+            print(targets.shape)
             train_err += train_fn(inputs, targets)
             train_pureErr += pureTrain_fn(inputs, targets)
             train_batches += 1
