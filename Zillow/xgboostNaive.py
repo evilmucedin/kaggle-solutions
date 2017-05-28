@@ -291,9 +291,10 @@ def train_nn(featuresTrain, labelsTrain, featuresTest, labelsTest):
     return predict_fn
 
 def castF(x):
+    cNanReplacement = -1000000
     casted = x.astype(np.float32, copy=False)
-    casted[np.isnan(casted)] = 1000000
-    casted[np.isinf(casted)] = 1000000
+    casted[np.isnan(casted)] = cNanReplacement
+    casted[np.isinf(casted)] = cNanReplacement
     return casted
 
 x_trainSF = castF(x_trainS.values)
