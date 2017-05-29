@@ -17,13 +17,13 @@ import theano.tensor as T
 
 import lasagne
 
-cTest = True
+cTest = False
 if cTest:
-    xgboostLr = 0.1
-    num_epochs = 200
+    xgboostLr = 0.4
+    num_epochs = 100
     numUnits1 = 100
     numUnits2 = 15
-    nnLr = 0.0001
+    nnLr = 0.001
 else:
     xgboostLr = 0.001
     num_epochs = 2000
@@ -400,7 +400,7 @@ for index, date in enumerate(dates):
     x_test['transactiondate'] = pd.to_datetime([date]).astype(np.int64)[0]
 
     print('Start predict...')
-    p_test = np.array(len(x_test), dtype=np.float32)
+    p_test = []
     batchSize = 1000
     batchBegin = 0
     iBatch = 0
@@ -409,10 +409,15 @@ for index, date in enumerate(dates):
         if iBatch % 100 == 0:
             print("\t...%d" % iBatch)
         batchEnd = min(len(x_test), batchBegin + batchSize)
-        p_test[batchStart:batchEnd] = clf.predict(x_test[batchStart:batchEnd].values.astype(np.float32, copy=False))
-        batchBegin = batchEnd
+        features = x_test.loc[batchBegin:batchEnd].values.astype(np.float32, copy=False)
+        prediction = clf.predict(features)
+        # print(len(prediction), len(features))
+        p_test.extend(prediction)
+        batchBegin = batchEnd + 1
     print('End predict...')
 
+    print("p_test", len(p_test))
+    print("sub", len(sub))
     sub[sub.columns[index + 1]] = p_test
 
     del p_test
