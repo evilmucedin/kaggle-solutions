@@ -10,6 +10,7 @@ import xgboost as xgb
 import lightgbm as lgb
 from subprocess import call
 from sklearn.preprocessing import LabelEncoder
+import threading
 
 import numpy as np
 import theano
@@ -26,9 +27,9 @@ if cTest:
     nnLr = 0.001
 else:
     xgboostLr = 0.001
-    num_epochs = 2000
-    numUnits1 = 200
-    numUnits2 = 30
+    num_epochs = 4000
+    numUnits1 = 50
+    numUnits2 = 15
     nnLr = 0.00001
 
 def readOrPickle(filename):
@@ -50,13 +51,31 @@ train['transactiondate'] = pd.to_datetime(train['transactiondate']).astype(np.in
 
 prop = readOrPickle('%s/properties_2016.csv' % folder)
 
+print('Prop transformation...')
+
 def dump(df):
     for c in df.columns:
         print(c, df[c])
 
 dump(prop)
 
-sample = readOrPickle('%s/sample_submission.csv' % folder)
+TO_BOOL = ['hashottuborspa', 'fireplaceflag']
+
+def convert_to_bool(data, columns):
+    if len(columns) != 0:
+        for c in columns:
+            data[c] = (data[c] == True)
+    return data
+
+def replace_nan(data):
+    data['taxdelinquencyyear'] = data['taxdelinquencyyear'].fillna(0)
+    data['taxdelinquencyflag'] = data['taxdelinquencyflag'].fillna('N')
+    for c in ['taxdelinquencyflag', 'propertyzoningdesc', 'propertycountylandusecode']:
+        data[c] = data[c].values.astype(np.str)
+        data[c] = LabelEncoder().fit_transform(data[c])
+    return data
+
+prop = replace_nan(convert_to_bool(prop, TO_BOOL))
 
 print('Binding to float32')
 
@@ -71,47 +90,26 @@ df_train = train.merge(prop, how='left', on='parcelid')
 del train
 gc.collect()
 
-TO_BOOL = ['hashottuborspa','fireplaceflag']
-TO_STRING = ['propertycountylandusecode', 'propertyzoningdesc']
-
-def convert_to_bool(data, columns):
-    if len(columns) != 0:
-        for c in columns:
-            data[c] = (data[c] == True)
-    return data
-
-
-def replace_nan(data):
-    data['taxdelinquencyyear'] = data['taxdelinquencyyear'].fillna(0)
-    data['taxdelinquencyflag'] = data['taxdelinquencyflag'].fillna('N')
-    for c in ['taxdelinquencyflag', 'propertyzoningdesc', 'propertycountylandusecode']:
-        data[c] = data[c].values.astype(np.str)
-        data[c] = LabelEncoder().fit_transform(data[c])
-    return data
-
-df_train = replace_nan(convert_to_bool(df_train, TO_BOOL))
-
 drop_columns = []
 for x in df_train.columns:
     c = df_train[x]
-    nan = 0
-    notNan = 0
-    for v in c.astype(np.float32, copy=False):
-        if np.isnan(v):
-            nan += 1
-        else:
-            notNan += 1
+    casted = c.astype(np.float32, copy=False)
+    nan = len(casted[np.isnan(casted)])
+    notNan = len(casted) - nan
     if 0 != nan:
         print('Has Nan: %s nan=%d notNan=%d' % (x, nan, notNan))
     if 0 == notNan:
         drop_columns.append(x)
 
 print('Drop: ', ','.join(drop_columns))
+prop = prop.drop(drop_columns, axis=1)
 df_train = df_train.drop(drop_columns, axis=1)
 
 df_train = df_train.iloc[np.random.permutation(len(df_train))]
 
 print('Creating test set ...')
+
+sample = readOrPickle('%s/sample_submission.csv' % folder)
 
 sample['parcelid'] = sample['ParcelId']
 df_test = sample.merge(prop, how='left', on='parcelid')
@@ -119,7 +117,7 @@ df_test = sample.merge(prop, how='left', on='parcelid')
 del prop, sample
 gc.collect()
 
-split = (len(df_train)*9)//10
+split = (len(df_train)*8)//10
 df_trainS, df_validS = df_train[:split], df_train[split:]
 
 def remove_logerror_outliers(data):
@@ -133,14 +131,16 @@ def remove_logerror_outliers(data):
 
 df_trainS = remove_logerror_outliers(df_trainS)
 
-x_train = df_train.drop(['logerror'], axis=1)
+cToDrop = ['logerror', 'parcelid']
+
+x_train = df_train.drop(cToDrop, axis=1)
 y_train = df_train['logerror'].values
 print(x_train.shape, y_train.shape)
 
-x_trainS = df_trainS.drop(['logerror'], axis=1)
+x_trainS = df_trainS.drop(cToDrop, axis=1)
 y_trainS = df_trainS['logerror'].values
 
-x_validS = df_validS.drop(['logerror'], axis=1)
+x_validS = df_validS.drop(cToDrop, axis=1)
 y_validS = df_validS['logerror'].values
 
 del df_train, df_trainS, df_validS
@@ -226,7 +226,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
             excerpt = slice(start_idx, start_idx + batchsize)
         yield inputs[excerpt], targets[excerpt]
 
-def train_nn(featuresTrain, labelsTrain, featuresTest, labelsTest):
+def train_nn(featuresTrain, labelsTrain, featuresTest, labelsTest, numEpochs):
     # Prepare Theano variables for inputs and targets
     input_var = T.fmatrix('inputs')
     target_var = T.fmatrix('targets')
@@ -251,7 +251,9 @@ def train_nn(featuresTrain, labelsTrain, featuresTest, labelsTest):
     # Finally, launch the training loop.
     print("Starting training...")
     batchSize = 1000
-    for epoch in range(num_epochs):
+    bestEpoch = -1
+    bestScore = 1e10
+    for epoch in range(numEpochs):
         # In each epoch, we do a full pass over the training data:
         train_err = 0
         train_batches = 0
@@ -285,10 +287,15 @@ def train_nn(featuresTrain, labelsTrain, featuresTest, labelsTest):
         print("Epoch {} of {} took {:.3f}s".format(epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
         print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
-        print("  test loss:\t\t{:.6f}".format(test_err / test_batches))
-    
-    print("Training done...")
-    return predict_fn
+        if 0 != test_batches:
+            testLoss = test_err / test_batches
+            print("  test loss:\t\t{:.6f}".format(testLoss))
+            if testLoss < bestScore:
+                bestScore = testLoss
+                bestEpoch = epoch
+
+    print("Training done (bestEpoch=%d)..." % bestEpoch)
+    return (predict_fn, bestEpoch)
 
 def castF(x):
     cNanReplacement = -1000000
@@ -311,12 +318,32 @@ def transformFeatures(df):
 x_validSF = transformFeatures(x_validS)
 y_validSF = castF(y_validS).reshape(len(y_validS), 1)
 
-predict_fn = train_nn(transformFeatures(x_trainSF), castF(y_trainS).reshape(len(y_trainS), 1) - b, x_validSF, y_validSF - b)
+predict_fn, bestEpoch = train_nn(transformFeatures(x_trainSF), castF(y_trainS).reshape(len(y_trainS), 1) - b, x_validSF, y_validSF - b, num_epochs)
 nnPrediction = predict_fn(x_validSF) + b
+nnPrediction = nnPrediction.reshape(len(nnPrediction))
 print(nnPrediction, y_validSF)
 
-print("Full prediction...")
-nnPredictionFull = predict_fn(transformFeatures(castF(x_test.values))) + b
+predict_fn, bestEpoch = train_nn(transformFeatures(castF(x_train.values)), castF(y_train).reshape(len(y_train), 1) - b, [], [], bestEpoch)
+print('Start full NN prediction...')
+nnPredictionFull = []
+batchSize = 1000
+batchBegin = 0
+iBatch = 0
+while batchBegin < len(x_test):
+    iBatch += 1
+    if iBatch % 100 == 0:
+        print("\t...%d" % iBatch)
+    batchEnd = min(len(x_test), batchBegin + batchSize)
+    features = transformFeatures(castF(x_test.loc[batchBegin:batchEnd].values))
+    prediction = predict_fn(features) + b
+    prediction = prediction.reshape(len(prediction))
+    nnPredictionFull.extend(prediction)
+    del prediction, features
+    batchBegin = batchEnd + 1
+print('End full NN prediction...')
+nnPredictionFull = np.array(nnPredictionFull, dtype=np.float32)
+
+print("Full prediction: %d" % len(nnPredictionFull))
 
 del x_trainSF, normMin, normMax, x_validSF, predict_fn
 gc.collect()
@@ -351,7 +378,7 @@ params['min_data'] = 500
 params['min_hessian'] = 1
 params['verbosity'] = -1
 params['num_threads'] = 16
-params['max_bin'] = 1024
+params['max_bin'] = 2048
 # params['max_depth'] = 10
 
 clfS = lgb.train(params, d_trainS, 10000, [d_validS], early_stopping_rounds=100, verbose_eval=True)
@@ -385,7 +412,7 @@ d_train = lgb.Dataset(x_train, label=y_train)
 del x_train, y_train
 gc.collect()
 
-clf = lgb.train(params, d_train, verbose_eval=True)
+clf = lgb.train(params, d_train, gdbBestIteration, verbose_eval=True)
 
 del d_train
 gc.collect()
@@ -394,52 +421,67 @@ print('Building test set ...')
 
 sub = readOrPickle('%s/sample_submission.csv' % folder)
 dates = ['20161001', '20161101', '20161201', '20171001', '20171101', '20171201']
-for index, date in enumerate(dates):
-    print('Predicting on test %s...' % date)
+gdbPredictions = []
+for _ in range(len(dates)):
+    gdbPredictions.append([])
 
-    x_test['transactiondate'] = pd.to_datetime([date]).astype(np.int64)[0]
-
-    print('Start predict...')
-    p_test = []
+def predict(index):
+    print('Start predict %s...' % str(index))
+    p_test = gdbPredictions[index]
     batchSize = 1000
     batchBegin = 0
     iBatch = 0
     while batchBegin < len(x_test):
         iBatch += 1
         if iBatch % 100 == 0:
-            print("\t...%d" % iBatch)
+            print("\t...%d %d" % (index, iBatch))
         batchEnd = min(len(x_test), batchBegin + batchSize)
-        features = x_test.loc[batchBegin:batchEnd].values.astype(np.float32, copy=False)
+        subTest = x_test.loc[batchBegin:batchEnd]
+        subTest = subTest.copy()
+        subTest['transactiondate'] = pd.to_datetime([dates[index]]).astype(np.int64)[0]
+        features = subTest.values.astype(np.float32, copy=False)
         prediction = clf.predict(features)
-        # print(len(prediction), len(features))
         p_test.extend(prediction)
+        del prediction, features, subTest
         batchBegin = batchEnd + 1
-    print('End predict...')
+    print('End predict... %s' % str(index))
 
-    print("p_test", len(p_test))
-    print("sub", len(sub))
-    sub[sub.columns[index + 1]] = p_test
+gdbThreads = []
+for index, date in enumerate(dates):
+    print('Predicting on test %s...' % date)
+    t = threading.Thread(target=predict, args=[index])
+    t.start()
+    gdbThreads.append(t)
 
-    del p_test
-    gc.collect()
+for t in gdbThreads:
+    t.join()
+
+for index in range(len(dates)):
+    sub[sub.columns[index + 1]] = gdbPredictions[index]
 
 del x_test
 gc.collect()
 
-print('Start NN...')
-subNN = readOrPickle('%s/sample_submission.csv' % folder)
-for index, _ in enumerate(dates):
-    subNN[subNN.columns[index + 1]] = bestLambda*nnPredictionFull + (1.0 - bestLambda)*sub[sub.columns[index + 1]]
+for index in range(len(gdbPredictions)):
+    gdbPredictions[index] = np.array(gdbPredictions[index])
 
 suffix = "_test" if cTest else ""
 outFilename = 'xgb_starter%s.csv' % suffix
 
 print('Writing csv ...')
 sub.to_csv(outFilename, index=False, float_format='%.4f')
-call(["gzip", "-q", outFilename])
+call(["gzip", "-f", "-q", outFilename])
+
+del sub
+gc.collect()
+
+print('Start NN...')
+subNN = readOrPickle('%s/sample_submission.csv' % folder)
+for index, _ in enumerate(dates):
+    subNN[subNN.columns[index + 1]] = nnPredictionFull*bestLambda + gdbPredictions[index]*(1.0 - bestLambda)
 
 outFilenameNN = 'xgb_starterNN%s.csv' % suffix
 
 print('Writing csv nn ...')
 subNN.to_csv(outFilenameNN, index=False, float_format='%.4f')
-call(["gzip", "-q", outFilenameNN])
+call(["gzip", "-f", "-q", outFilenameNN])
